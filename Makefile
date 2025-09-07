@@ -32,17 +32,18 @@ guard-module:
 # Testing
 test:
 	@echo "🧪 运行测试..."
-	# 添加测试命令
+	cd backend && python -m pytest -v
 
 # Linting
 lint:
 	@echo "📏 运行代码检查..."
-	# 添加lint命令
+	cd backend && python -m flake8 app --max-line-length=88 --statistics
 
 # Formatting
 format:
 	@echo "🎨 代码格式化..."
-	# 添加格式化命令
+	cd backend && python -m black app --line-length=88
+	cd backend && python -m isort app
 
 # Development environment
 dev:
