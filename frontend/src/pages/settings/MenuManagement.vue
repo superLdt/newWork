@@ -16,7 +16,7 @@
       </template>
       
       <div class="menu-container">
-        <div class="menu-tree-container">
+        <div class="menu-tree-container" v-loading="loading">
           <el-input
             v-model="searchKeyword"
             placeholder="搜索菜单名称或代码"
@@ -29,6 +29,7 @@
           </el-input>
           
           <el-tree
+            v-if="filteredMenus.length > 0"
             ref="menuTree"
             :data="filteredMenus"
             :props="defaultProps"
@@ -71,6 +72,7 @@
               </div>
             </template>
           </el-tree>
+          <el-empty v-else description="暂无菜单数据" />
         </div>
         
         <div class="menu-detail" v-if="selectedMenu">
@@ -269,6 +271,7 @@ const searchKeyword = ref('')
 const selectedMenu = ref(null)
 const menuPermissions = ref([])
 const permissionsLoading = ref(false)
+const loading = ref(false)
 
 // 菜单表单相关
 const menuDialogVisible = ref(false)
@@ -342,6 +345,7 @@ function formatDateTime(dateString) {
 // 加载菜单数据
 async function loadMenus() {
   try {
+    loading.value = true
     const response = await apiService.get('/menus')
     if (response.code === 200) {
       menus.value = response.data || []
@@ -355,6 +359,8 @@ async function loadMenus() {
   } catch (error) {
     console.error('Load menus failed:', error)
     ElMessage.error('获取菜单列表失败: ' + error.message)
+  } finally {
+    loading.value = false
   }
 }
 

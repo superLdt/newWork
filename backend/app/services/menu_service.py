@@ -6,6 +6,7 @@
 
 from typing import List, Optional, Dict, Any
 from sqlalchemy import and_, or_
+from flask import current_app
 from ..extensions import db
 from ..models import Menu, Permission, MenuPermission, User
 
@@ -311,6 +312,43 @@ class MenuService:
         permissions = MenuPermission.get_menu_permissions(menu_id)
         return [permission.to_dict() for permission in permissions]
     
+    
+    @staticmethod
+    def validate_menu_ids(menu_ids: List[int]) -> List[int]:
+        """
+        验证菜单ID列表是否存在
+
+        Args:
+            menu_ids: 菜单ID列表
+
+        Returns:
+            list: 存在的菜单ID列表
+        """
+        if not menu_ids:
+            return []
+        existing_menus = db.session.query(Menu).filter(
+            Menu.id.in_(menu_ids)
+        ).all()
+        return [m.id for m in existing_menus]
+
+    @staticmethod
+    def get_permissions_by_menu_ids(menu_ids: List[int]) -> List[int]:
+        """
+        根据菜单ID列表获取所有相关的权限ID
+
+        Args:
+            menu_ids: 菜单ID列表
+
+        Returns:
+            list: 权限ID列表
+        """
+        if not menu_ids:
+            return []
+        menu_permissions = db.session.query(MenuPermission).filter(
+            MenuPermission.menu_id.in_(menu_ids)
+        ).all()
+        return list(set([mp.permission_id for mp in menu_permissions]))
+
     @staticmethod
     def bind_menu_permissions(menu_id: int, permission_ids: List[int]) -> List[MenuPermission]:
         """
@@ -461,7 +499,59 @@ class MenuService:
             query = query.filter(Menu.is_active == True)
         
         return query.order_by(Menu.name.asc()).all()
-    
+
+    @staticmethod
+    def get_menu_tree_by_role_permissions(role_id: int, include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """
+        根据角色权限获取菜单树
+
+        Args:
+            role_id: 角色ID
+            include_inactive: 是否包含未启用的菜单
+
+        Returns:
+            list: 角色可访问的菜单树结构
+        """
+        from ..models import Role, RolePermission
+
+        current_app.logger.debug(f"get_menu_tree_by_role_permissions called with role_id: {role_id}")
+        role = Role.query.get(role_id)
+        if not role:
+            current_app.logger.debug(f"Role with ID {role_id} not found. Returning empty list.")
+            return []
+
+        # 获取角色拥有的所有权限ID（从 RolePermission 关联表查询）
+        role_permission_ids = [rp.permission_id for rp in RolePermission.query.filter_by(role_id=role_id).all()]
+        current_app.logger.debug(f"Role permission IDs: {role_permission_ids}")
+
+        # 获取所有菜单权限关联
+        menu_permissions = MenuPermission.query.filter(
+            MenuPermission.permission_id.in_(role_permission_ids)
+        ).all()
+
+        # 获取所有与角色权限关联的菜单ID
+        accessible_menu_ids = list(set([mp.menu_id for mp in menu_permissions]))
+        current_app.logger.debug(f"Accessible menu IDs: {accessible_menu_ids}")
+
+        # 获取所有菜单
+        all_menus = MenuService.get_all_menus(include_inactive)
+        current_app.logger.debug(f"Total menus fetched: {len(all_menus)}")
+
+        # 过滤菜单，只保留与角色权限关联的菜单及其所有祖先菜单
+        filtered_menus = set()
+        for menu in all_menus:
+            if menu.id in accessible_menu_ids:
+                filtered_menus.add(menu)
+                # 添加所有祖先菜单
+                ancestors = menu.get_ancestors()
+                filtered_menus.update(ancestors)
+        current_app.logger.debug(f"Filtered menus count: {len(filtered_menus)}")
+
+        # 构建菜单树
+        menu_tree = Menu.build_menu_tree(list(filtered_menus))
+        current_app.logger.debug(f"Menu tree built. Root nodes count: {len(menu_tree)}")
+        return menu_tree
+
     @staticmethod
     def get_menu_statistics() -> Dict[str, Any]:
         """

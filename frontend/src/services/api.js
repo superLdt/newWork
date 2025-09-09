@@ -1,3 +1,4 @@
+import { ElMessage } from 'element-plus'
 import axios from 'axios'
 
 // 创建axios实例
@@ -8,6 +9,20 @@ const api = axios.create({
     'Content-Type': 'application/json'
   }
 })
+
+let isRefreshing = false // 标记是否正在刷新token
+let failedQueue = [] // 存储失败的请求
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
 
 // 请求拦截器
 api.interceptors.request.use(
@@ -29,27 +44,69 @@ api.interceptors.response.use(
   (response) => {
     return response.data
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config
     const status = error.response?.status
-    const requestUrl = error.config?.url || ''
+    const requestUrl = originalRequest?.url || ''
     const currentPath = window.location?.pathname || ''
 
-    if (status === 401) {
+    // 统一处理错误响应，确保错误信息结构一致
+    const errorResponse = {
+      code: status || 500,
+      message: error.response?.data?.message || error.message || '请求失败',
+      data: error.response?.data
+    }
+
+    // 401 未授权处理
+    if (status === 401 && !originalRequest._retry) {
       // 对于登录接口或当前已在登录页，避免重定向，防止页面重载导致提示秒闪
       const isLoginRequest = requestUrl.includes('/auth/login')
       const alreadyOnLogin = currentPath === '/login'
-      if (!isLoginRequest && !alreadyOnLogin) {
-        // 未授权，清除token并跳转到登录页
-        localStorage.removeItem('token')
-        window.location.href = '/login'
+
+      if (isLoginRequest || alreadyOnLogin) {
+        return Promise.reject(errorResponse)
       }
-    }
-    
-    // 统一处理错误响应，确保错误信息结构一致
-    const errorResponse = {
-      code: error.response?.status || 500,
-      message: error.response?.data?.message || error.message || '请求失败',
-      data: error.response?.data
+
+      if (isRefreshing) {
+        return new Promise(function(resolve, reject) {
+          failedQueue.push({ resolve, reject })
+        }).then(token => {
+          originalRequest.headers['Authorization'] = 'Bearer ' + token
+          return api(originalRequest)
+        }).catch(err => {
+          return Promise.reject(err)
+        })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        // 尝试刷新token
+        const refreshToken = localStorage.getItem('refreshToken') // 假设有refreshToken
+        if (!refreshToken) {
+          // 没有refreshToken，直接跳转登录
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          window.location.href = '/login'
+          return Promise.reject(errorResponse)
+        }
+        
+        // 实际的刷新token请求，这里需要根据后端接口调整
+        const refreshResponse = await axios.post('http://localhost:5000/api/v1/auth/refresh', { refreshToken })
+        const newToken = refreshResponse.data.token
+        localStorage.setItem('token', newToken)
+        processQueue(null, newToken)
+        return api(originalRequest)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+        return Promise.reject(errorResponse)
+      } finally {
+        isRefreshing = false
+      }
     }
     
     return Promise.reject(errorResponse)

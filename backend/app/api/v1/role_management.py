@@ -10,12 +10,14 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from ...services.role_service import RoleService
 from ...utils.exceptions import SmartTransportException
+from ...services.role_permission_service import RolePermissionService
+from ...services.menu_service import MenuService
 from . import api_v1_bp
 
 role_bp = Blueprint('role', __name__, url_prefix='/roles')
 
 
-@role_bp.route('/', methods=['GET'])
+@role_bp.route('', methods=['GET'])
 @jwt_required()
 def list_roles():
     """
@@ -90,11 +92,7 @@ def update_role_menus(role_id):
         
         # 验证菜单是否存在
         if menu_ids:
-            existing_menus = db.session.query(Menu).filter(
-                Menu.id.in_(menu_ids)
-            ).all()
-            existing_menu_ids = [m.id for m in existing_menus]
-            
+            existing_menu_ids = MenuService.validate_menu_ids(menu_ids)
             invalid_ids = set(menu_ids) - set(existing_menu_ids)
             if invalid_ids:
                 return jsonify({
@@ -104,12 +102,7 @@ def update_role_menus(role_id):
                 }), 400
         
         # 获取菜单对应的权限
-        permission_ids = []
-        if menu_ids:
-            menu_permissions = db.session.query(MenuPermission).filter(
-                MenuPermission.menu_id.in_(menu_ids)
-            ).all()
-            permission_ids = list(set([mp.permission_id for mp in menu_permissions]))
+        permission_ids = MenuService.get_permissions_by_menu_ids(menu_ids)
         
         # 同步角色权限
         RolePermissionService.sync_role_permissions(role_id, permission_ids)
@@ -150,15 +143,8 @@ def get_role_menus(role_id):
     }
     """
     try:
-        # 获取角色拥有的权限
-        role_permissions = RolePermissionService.get_role_permissions(role_id)
-        permission_codes = [p['code'] for p in role_permissions]
-        
-        # 获取所有菜单
-        menu_tree = MenuService.get_menu_tree()
-        
-        # 根据角色权限过滤菜单树
-        filtered_menus = MenuService.get_menu_tree_by_role_permissions(menu_tree, permission_codes)
+        # 获取角色可访问的菜单树
+        filtered_menus = MenuService.get_menu_tree_by_role_permissions(role_id)
         
         return jsonify({
             'code': 200,
@@ -347,7 +333,7 @@ def get_role(role_id):
         }), 500
 
 
-@role_bp.route('/', methods=['POST'])
+@role_bp.route('', methods=['POST'])
 @jwt_required()
 def create_role():
     """

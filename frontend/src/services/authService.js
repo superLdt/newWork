@@ -12,6 +12,8 @@ class AuthService {
         localStorage.setItem('token', response.data.token)
         localStorage.setItem('user', JSON.stringify(response.data.user))
         
+        // 登录成功后，尝试获取用户信息，确保用户数据最新
+        await this.getUserInfo()
         ElMessage.success('登录成功')
         return { success: true, data: response.data }
       } else {
@@ -87,8 +89,10 @@ class AuthService {
         return { success: false, message: response.message }
       }
     } catch (error) {
-      ElMessage.error('获取用户信息失败，请检查网络连接')
-      return { success: false, message: '网络错误' }
+      // 统一处理获取用户信息失败的情况
+      const errorMessage = error.response?.data?.message || error.message || '获取用户信息失败，请检查网络连接'
+      ElMessage.error(errorMessage)
+      return { success: false, message: errorMessage }
     }
   }
   
