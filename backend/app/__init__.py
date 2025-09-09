@@ -29,8 +29,8 @@ def create_app(config_name='development'):
     from .extensions import init_extensions
     init_extensions(app)
     
-    # 启用CORS
-    CORS(app)
+    # 启用CORS并应用配置
+    CORS(app, origins=app.config.get('CORS_ORIGINS', '*'))
     
     # 注册蓝图
     register_blueprints(app)

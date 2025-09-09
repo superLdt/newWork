@@ -178,6 +178,7 @@ export default {
       rememberMe: false,
       loading: false,
       qrcodeUrl: '', // 实际项目中应从后端获取
+      errorMessage: '',
     }
   },
   mounted() {
@@ -189,23 +190,40 @@ export default {
       this.$refs.loginForm.validate(async (valid) => {
         if (valid) {
           this.loading = true
-          // 清除之前的错误信息
-          this.errorMessage = ''
           
-          // 使用认证服务进行登录
-          const result = await authService.login(
-            this.loginForm.username, 
-            this.loginForm.password
-          )
-          
-          this.loading = false
-          
-          if (result.success) {
-            // 登录成功后跳转到仪表盘
-            this.$router.push('/')
-          } else {
-            // 显示具体的错误信息
-            this.errorMessage = result.message || '登录失败，请检查用户名和密码'
+          try {
+            // 使用认证服务进行登录
+            const result = await authService.login(
+              this.loginForm.username, 
+              this.loginForm.password
+            )
+            
+            if (result.success) {
+              // 登录成功后初始化权限存储中的用户信息
+              const { usePermissionStore } = await import('@/stores/permission');
+              const permissionStore = usePermissionStore();
+              await permissionStore.initializeFromToken();
+              // 登录成功后跳转到仪表盘
+              this.$router.push('/')
+            } else {
+              // 显示具体的错误信息
+              this.errorMessage = result.message || '登录失败，请检查用户名和密码'
+              if (this.errorMessage) {
+                setTimeout(() => {
+                  this.errorMessage = ''
+                }, 5000)
+              }
+            }
+          } catch (error) {
+            console.error('登录失败:', error)
+            this.errorMessage = error.message || '登录失败，请稍后再试。'
+            if (this.errorMessage) {
+              setTimeout(() => {
+                this.errorMessage = ''
+              }, 5000)
+            }
+          } finally {
+            this.loading = false
           }
         }
       })

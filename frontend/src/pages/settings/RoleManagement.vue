@@ -1,29 +1,49 @@
 <template>
   <div class="role-management">
-    <el-card class="role-card">
-      <template #header>
-        <div class="card-header">
-          <span>角色管理</span>
-          <el-button type="primary" @click="showAddRoleDialog">
-            <el-icon><Plus /></el-icon>
-            添加角色
-          </el-button>
-        </div>
-      </template>
-      
-      <el-table :data="roles" style="width: 100%" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="80"></el-table-column>
-        <el-table-column prop="name" label="角色名称"></el-table-column>
-        <el-table-column prop="description" label="描述"></el-table-column>
-        <el-table-column prop="user_count" label="用户数" width="100"></el-table-column>
-        <el-table-column label="操作" width="150">
-          <template #default="scope">
-            <el-button size="small" @click="editRole(scope.row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="deleteRole(scope.row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+    <div v-if="currentView === 'list'">
+      <el-card class="role-card">
+        <template #header>
+          <div class="card-header">
+            <span>角色管理</span>
+            <el-button type="primary" @click="showAddRoleDialog">
+              <el-icon><Plus /></el-icon>
+              添加角色
+            </el-button>
+          </div>
+        </template>
+        
+        <el-table :data="roles" style="width: 100%" v-loading="loading" stripe>
+          <el-table-column prop="id" label="ID" width="80"></el-table-column>
+          <el-table-column prop="name" label="角色名称"></el-table-column>
+          <el-table-column prop="description" label="描述"></el-table-column>
+          <el-table-column prop="user_count" label="用户数" width="100"></el-table-column>
+          <el-table-column label="操作" width="300">
+            <template #default="scope">
+              <el-button size="small" @click="editRole(scope.row)">编辑</el-button>
+              <el-button size="small" type="primary" @click="configurePermissions(scope.row)">权限配置</el-button>
+              <el-button size="small" type="success" @click="configureMenus(scope.row)">菜单配置</el-button>
+              <el-button size="small" type="danger" @click="deleteRole(scope.row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+    </div>
+    
+    <div v-else-if="currentView === 'permissions'">
+      <role-permission-config 
+        :role="selectedRole" 
+        @cancel="currentView = 'list'" 
+        @saved="handlePermissionsSaved"
+      />
+    </div>
+    
+    <div v-else-if="currentView === 'menus'">
+      <menu-permission-config 
+        :role="selectedRole" 
+        @cancel="currentView = 'list'" 
+        @saved="handleMenusSaved"
+      />
+    </div>
     
     <!-- 添加/编辑角色对话框 -->
     <el-dialog
@@ -60,17 +80,23 @@
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiService } from '@/services/api'
+import RolePermissionConfig from '@/components/RolePermissionConfig.vue'
+import MenuPermissionConfig from '@/components/MenuPermissionConfig.vue'
 
 export default {
   name: 'RoleManagement',
   components: {
-    Plus
+    Plus,
+    RolePermissionConfig,
+    MenuPermissionConfig
   },
   data() {
     return {
       roles: [],
       loading: false,
       dialogVisible: false,
+      currentView: 'list', // 'list', 'permissions', 'menus'
+      selectedRole: null,
       editingRole: {
         id: null,
         name: '',
@@ -98,7 +124,7 @@ export default {
         const response = await apiService.roles.getRoles()
         
         if (response.code === 200) {
-          // 使用后端返回的角色数据，不再添加模拟权限数据
+          // 使用后端返回的角色数据，后端已经包含user_count字段
           this.roles = response.data
         } else {
           ElMessage.error(response.message || '获取角色列表失败')
@@ -150,6 +176,7 @@ export default {
       })
     },
     async deleteRole(role) {
+      // 检查角色是否有关联用户
       if (role.user_count > 0) {
         ElMessage.warning('该角色下有关联用户，无法删除')
         return
@@ -187,6 +214,22 @@ export default {
         description: ''
       }
       this.$refs.roleForm?.resetFields()
+    },
+    configurePermissions(role) {
+      this.selectedRole = { ...role }
+      this.currentView = 'permissions'
+    },
+    configureMenus(role) {
+      this.selectedRole = { ...role }
+      this.currentView = 'menus'
+    },
+    handlePermissionsSaved() {
+      ElMessage.success('权限配置已保存')
+      this.currentView = 'list'
+    },
+    handleMenusSaved() {
+      ElMessage.success('菜单权限配置已保存')
+      this.currentView = 'list'
     }
   }
 }

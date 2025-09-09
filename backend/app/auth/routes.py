@@ -10,6 +10,8 @@ from flask import jsonify, request
 from . import auth_bp
 from ..services.auth_service import AuthService
 from ..utils.exceptions import SmartTransportException
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from ..models.user import User
 
 
 @auth_bp.route('/login', methods=['POST'])
@@ -45,15 +47,24 @@ def login():
                 'data': None
             }), 400
         
+        # 先通过服务层校验用户名和密码（返回用户信息等）
         result = AuthService.authenticate_user(
             data.get('username'), 
             data.get('password')
         )
+        # 从结果中提取用户信息和token
+        user_dict = result.get('user')
+        # 从结果中提取token
+        access_token = result.get('token')
         
         return jsonify({
             'code': 200,
             'message': '登录成功',
-            'data': result
+            'data': {
+                'token': access_token,
+                'user': user_dict,
+                'expires_in': result.get('expires_in')
+            }
         })
         
     except SmartTransportException as e:
@@ -87,6 +98,7 @@ def logout():
 
 
 @auth_bp.route('/userinfo', methods=['GET'])
+@jwt_required()
 def get_user_info():
     """
     获取当前用户信息接口
@@ -104,16 +116,22 @@ def get_user_info():
     }
     """
     try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
+        # 从JWT中获取用户ID
+        identity = get_jwt_identity()
+        if not identity:
             return jsonify({
                 'code': 401,
                 'message': '缺少认证token',
                 'data': None
             }), 401
         
-        token = auth_header.split(' ')[1]
-        user = AuthService.get_user_by_token(token)
+        user = User.query.get(int(identity))
+        if not user or not user.is_active:
+            return jsonify({
+                'code': 401,
+                'message': '用户不存在或已被禁用',
+                'data': None
+            }), 401
         
         return jsonify({
             'code': 200,

@@ -139,6 +139,13 @@
         </span>
       </template>
     </el-dialog>
+    
+    <!-- 角色分配对话框 -->
+    <UserRoleAssignment
+      v-model="roleAssignmentVisible"
+      :user="selectedUser"
+      v-if="selectedUser"
+    />
   </div>
 </template>
 
@@ -236,7 +243,10 @@ export default {
           this.users = response.data.items.map(user => ({
             ...user,
             status: user.is_active ? 'active' : 'inactive',
-            created_at: user.created_at ? new Date(user.created_at).toLocaleString() : ''
+            is_active: user.is_active,
+            created_at: user.created_at ? new Date(user.created_at).toLocaleString() : '',
+            // 从用户的角色列表中获取第一个角色ID
+            role_id: user.roles && user.roles.length > 0 ? user.roles[0].id : null
           }))
           this.totalUsers = response.data.total
         } else {
@@ -260,7 +270,7 @@ export default {
     },
     getRoleName(roleId) {
       const role = this.roles.find(r => r.id === roleId)
-      return role ? role.name : '未知角色'
+      return role ? role.name : '未分配角色'
     },
     getRoleTagType(roleId) {
       const role = this.roles.find(r => r.id === roleId)
@@ -277,7 +287,7 @@ export default {
         password: '', 
         confirmPassword: '',
         full_name: user.full_name || user.fullname || '',
-        role_id: user.role_id || null
+        role_id: user.role_id || (user.roles && user.roles.length > 0 ? user.roles[0].id : null)
       }
       this.dialogVisible = true
     },
@@ -355,8 +365,25 @@ export default {
         }
       }
     },
-    toggleUserStatus(user) {
-      ElMessage.success(`用户${user.status === 'active' ? '启用' : '禁用'}成功`)
+    async toggleUserStatus(user) {
+      try {
+        const response = await apiService.users.updateUser(user.id, { 
+          is_active: user.status === 'active' 
+        })
+        
+        if (response.code === 200) {
+          ElMessage.success(`用户${user.status === 'active' ? '启用' : '禁用'}成功`)
+          user.is_active = user.status === 'active'
+        } else {
+          ElMessage.error(response.message || '状态更新失败')
+          // 恢复状态
+          user.status = user.status === 'active' ? 'inactive' : 'active'
+        }
+      } catch (error) {
+        ElMessage.error('状态更新失败: ' + error.message)
+        // 恢复状态
+        user.status = user.status === 'active' ? 'inactive' : 'active'
+      }
     },
     resetForm() {
       this.editingUser = {
@@ -421,10 +448,3 @@ export default {
   margin-left: 5px;
 }
 </style>
-
-<!-- 角色分配对话框 -->
-<UserRoleAssignment
-v-model="roleAssignmentVisible"
-:user="selectedUser"
-v-if="selectedUser"
-/>

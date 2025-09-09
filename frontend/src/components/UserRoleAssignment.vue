@@ -103,7 +103,7 @@ export default {
      */
     async loadUserRoles() {
       try {
-        const response = await apiService.roles.getUserRoles(this.user.id)
+        const response = await apiService.roles.getUserRolesApi(this.user.id)
         if (response.code === 200) {
           this.userRoles = response.data
         } else {
@@ -137,7 +137,7 @@ export default {
       if (!this.selectedRoleId) return
       
       try {
-        const response = await apiService.roles.assignRoleToUser(this.user.id, this.selectedRoleId)
+        const response = await apiService.roles.assignRoleToUserApi(this.user.id, this.selectedRoleId)
         if (response.code === 200) {
           ElMessage.success('角色分配成功')
           this.selectedRoleId = null
@@ -155,7 +155,7 @@ export default {
      */
     async removeRole(roleId) {
       try {
-        const response = await apiService.roles.removeRoleFromUser(this.user.id, roleId)
+        const response = await apiService.roles.removeRoleFromUserApi(this.user.id, roleId)
         if (response.code === 200) {
           ElMessage.success('角色移除成功')
           await this.loadUserRoles() // 重新加载用户角色

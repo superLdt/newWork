@@ -30,10 +30,19 @@ api.interceptors.response.use(
     return response.data
   },
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // 未授权，清除token并跳转到登录页
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+    const status = error.response?.status
+    const requestUrl = error.config?.url || ''
+    const currentPath = window.location?.pathname || ''
+
+    if (status === 401) {
+      // 对于登录接口或当前已在登录页，避免重定向，防止页面重载导致提示秒闪
+      const isLoginRequest = requestUrl.includes('/auth/login')
+      const alreadyOnLogin = currentPath === '/login'
+      if (!isLoginRequest && !alreadyOnLogin) {
+        // 未授权，清除token并跳转到登录页
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+      }
     }
     
     // 统一处理错误响应，确保错误信息结构一致
@@ -47,8 +56,15 @@ api.interceptors.response.use(
   }
 )
 
-// API服务对象
+// 导出API服务对象
 export const apiService = {
+  // 通用HTTP方法
+  get: (url, config = {}) => api.get(url, config),
+  post: (url, data = {}, config = {}) => api.post(url, data, config),
+  put: (url, data = {}, config = {}) => api.put(url, data, config),
+  delete: (url, config = {}) => api.delete(url, config),
+  patch: (url, data = {}, config = {}) => api.patch(url, data, config),
+  
   // 认证相关API
   auth: {
     // 用户登录
@@ -159,17 +175,17 @@ export const apiService = {
     },
     
     // 获取用户的角色
-    getUserRoles: (userId) => {
+    getUserRolesApi: (userId) => {
       return api.get(`/users/${userId}/roles`)
     },
     
     // 为用户分配角色
-    assignRoleToUser: (userId, roleId) => {
-      return api.post(`/users/${userId}/roles/${roleId}`)
+    assignRoleToUserApi: (userId, roleId) => {
+      return api.post(`/users/${userId}/roles`, { role_id: roleId })
     },
     
     // 移除用户的角色
-    removeRoleFromUser: (userId, roleId) => {
+    removeRoleFromUserApi: (userId, roleId) => {
       return api.delete(`/users/${userId}/roles/${roleId}`)
     }
   }

@@ -5,6 +5,7 @@
 
 from sqlalchemy.exc import IntegrityError
 from ..models.user import User
+from ..models.role import Role
 from ..extensions import db
 from ..utils.exceptions import ValidationError, ResourceNotFoundError
 
@@ -85,6 +86,14 @@ class UserService:
             user.set_password(user_data['password'])
             
             db.session.add(user)
+            db.session.flush()  # 获取用户ID
+            
+            # 如果指定了角色，分配角色
+            if 'role_id' in user_data and user_data['role_id']:
+                role = Role.query.get(user_data['role_id'])
+                if role:
+                    user.roles.append(role)
+            
             db.session.commit()
             
             return user.to_dict()
@@ -120,6 +129,17 @@ class UserService:
             # 如果更新密码
             if 'password' in update_data:
                 user.set_password(update_data.pop('password'))
+            
+            # 处理角色更新
+            if 'role_id' in update_data:
+                role_id = update_data.pop('role_id')
+                if role_id:
+                    # 清除现有角色
+                    user.roles.clear()
+                    # 分配新角色
+                    role = Role.query.get(role_id)
+                    if role:
+                        user.roles.append(role)
             
             # 更新其他字段
             for key, value in update_data.items():

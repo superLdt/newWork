@@ -4,6 +4,8 @@ import MainLayout from '../layouts/MainLayout.vue'
 import Dashboard from '../pages/Dashboard.vue'
 import UserManagement from '../pages/settings/UserManagement.vue'
 import RoleManagement from '../pages/settings/RoleManagement.vue'
+import PermissionManagement from '../pages/settings/PermissionManagement.vue'
+import MenuManagement from '../pages/settings/MenuManagement.vue'
 import SystemConfig from '../pages/settings/SystemConfig.vue'
 import AuditLog from '../pages/settings/AuditLog.vue'
 import ComingSoon from '../components/ComingSoon.vue'
@@ -14,7 +16,7 @@ const routes = [
     path: '/login',
     name: 'Login',
     component: Login,
-    meta: { requiresGuest: true }
+    meta: { requiresAuth: false, requiresGuest: true }
   },
   {
     path: '/',
@@ -28,51 +30,118 @@ const routes = [
       },
       // 基础数据路由
       {
-        path: '/data/vehicles',
+        path: '/basic-data/vehicles',
         name: 'Vehicles',
-        component: ComingSoon
+        component: ComingSoon,
+        meta: {
+          title: '车辆管理',
+          menuCode: 'vehicle_management'
+        }
       },
       {
-        path: '/data/routes',
-        name: 'Routes',
-        component: ComingSoon
+        path: '/basic-data/drivers',
+        name: 'Drivers',
+        component: ComingSoon,
+        meta: {
+          title: '司机管理',
+          menuCode: 'driver_management'
+        }
       },
       {
-        path: '/data/companies',
-        name: 'Companies',
-        component: ComingSoon
+        path: '/basic-data/customers',
+        name: 'Customers',
+        component: ComingSoon,
+        meta: {
+          title: '客户管理',
+          menuCode: 'customer_management'
+        }
       },
       // 调度管理路由
       {
-        path: '/dispatch/manual',
-        name: 'ManualDispatch',
-        component: ComingSoon
+        path: '/dispatch/orders',
+        name: 'TransportOrders',
+        component: ComingSoon,
+        meta: {
+          title: '运输订单',
+          menuCode: 'transport_orders'
+        }
       },
       {
         path: '/dispatch/tasks',
-        name: 'TransportTasks',
-        component: ComingSoon
+        name: 'DispatchTasks',
+        component: ComingSoon,
+        meta: {
+          title: '调度任务',
+          menuCode: 'dispatch_tasks'
+        }
       },
-      // 系统管理路由
       {
-        path: '/settings/user',
+        path: '/dispatch/tracking',
+        name: 'TransportTracking',
+        component: ComingSoon,
+        meta: {
+          title: '运输跟踪',
+          menuCode: 'transport_tracking'
+        }
+      },
+      // 系统设置路由
+      {
+        path: '/settings/users',
         name: 'UserManagement',
-        component: UserManagement
+        component: UserManagement,
+        meta: {
+          title: '用户管理',
+          permission: 'user:read',
+          menuCode: 'user_management'
+        }
       },
       {
-        path: '/settings/role',
+        path: '/settings/roles',
         name: 'RoleManagement',
-        component: RoleManagement
+        component: RoleManagement,
+        meta: {
+          title: '角色管理',
+          permission: 'role:read',
+          menuCode: 'role_management'
+        }
+      },
+      {
+        path: '/settings/permissions',
+        name: 'PermissionManagement',
+        component: PermissionManagement,
+        meta: {
+          title: '权限管理',
+          permission: 'permission:read',
+          menuCode: 'permission_management'
+        }
+      },
+      {
+        path: '/settings/menu',
+        name: 'MenuManagement',
+        component: MenuManagement,
+        meta: {
+          title: '菜单管理',
+          permission: 'menu:read',
+          menuCode: 'menu_management'
+        }
       },
       {
         path: '/settings/config',
         name: 'SystemConfig',
-        component: SystemConfig
+        component: SystemConfig,
+        meta: {
+          title: '系统配置',
+          requiresAdmin: true
+        }
       },
       {
         path: '/settings/logs',
         name: 'AuditLog',
-        component: AuditLog
+        component: AuditLog,
+        meta: {
+          title: '审计日志',
+          requiresAdmin: true
+        }
       },
       // 规划管理路由
       {
@@ -105,31 +174,7 @@ const router = createRouter({
   routes
 })
 
-// 添加导航守卫
-router.beforeEach((to, from, next) => {
-  // 检查路由是否需要认证
-  if (to.meta.requiresAuth) {
-    // 路由需要认证
-    if (authService.isAuthenticated()) {
-      // 用户已登录，允许访问
-      next()
-    } else {
-      // 用户未登录，重定向到登录页面
-      next('/login')
-    }
-  } else if (to.meta.requiresGuest) {
-    // 路由只允许未登录用户访问
-    if (authService.isAuthenticated()) {
-      // 用户已登录，重定向到仪表盘
-      next('/')
-    } else {
-      // 用户未登录，允许访问
-      next()
-    }
-  } else {
-    // 路由不需要特殊认证，直接访问
-    next()
-  }
-})
+// 注意：路由守卫已移至 @/guards/permission.js 中统一处理
+// 包括认证检查、权限验证、角色验证等功能
 
 export default router

@@ -6,6 +6,19 @@
 
 版权所有 © 2025 安徽邮政运输管控中心
 
+## 架构规范
+
+系统严格遵循四层架构设计，确保代码的可维护性和可扩展性。详细架构规范请参考 [架构规则文档](../docs/architecture_rules.md) 和 [架构检查清单](../docs/architecture_checklist.md)。
+
+### 架构分层
+
+1. **表现层 (Presentation Layer)**: 处理HTTP请求和响应
+2. **服务层 (Service Layer)**: 实现业务逻辑
+3. **数据访问层 (Data Access Layer)**: 数据模型和持久化
+4. **应用层 (Application Layer)**: 应用初始化和配置
+
+详细信息请查看 [架构规则文档](../docs/architecture_rules.md)。
+
 ## 项目概述
 本项目旨在开发一套集智能化、信息化、可视化于一体的智能运力系统，实现对运输资源的高效管理和优化调度。通过整合多源数据，运用先进的数据分析和算法技术，从而提高运输效率、降低运营成本、增强服务质量，实现运输过程的全数字化管理，为运输调度提供精准的数据支持和科学的决策依据。助力安徽邮政运输管控中心实现数字化转型和可持续发展。
 ### 项目背景
@@ -253,6 +266,25 @@ npm run dev
 # 构建生产版本
 npm run build
 ```
+
+### 架构验证
+为确保代码符合架构规范，提供了以下验证命令：
+
+```bash
+# 架构检查
+make guard
+
+# 架构验证
+make validate
+
+# 代码质量检查
+make lint
+
+# 代码格式化
+make format
+```
+
+详细的任务执行规范请参考 [任务执行计划文档](../docs/task_execution_plan.md)。
 
 ### 数据库迁移
 如需切换数据库或执行数据库迁移，请参考DATABASE_MIGRATION_GUIDE.md文件。

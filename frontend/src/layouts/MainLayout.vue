@@ -4,7 +4,7 @@
       <div class="header-left">
         <div class="logo">
           <el-icon class="collapse-icon" @click="toggleSidebar">
-            <component :is="isSidebarCollapsed ? 'Expand' : 'Fold'" />
+            <component :is="isSidebarCollapsed ? Expand : Fold" />
           </el-icon>
           <span :class="{ 'collapsed-logo': isSidebarCollapsed }">智能运力系统</span>
         </div>
@@ -18,7 +18,7 @@
               <span class="user-role">{{ currentUserRole || '系统管理员' }}</span>
             </div>
             <el-icon class="dropdown-icon">
-              <arrow-down />
+              <ArrowDown />
             </el-icon>
           </span>
           <template #dropdown>
@@ -43,203 +43,8 @@
     
     <el-container>
       <el-aside :width="isSidebarCollapsed ? '64px' : '220px'" class="sidebar">
-        <el-menu
-          :default-active="activeMenu"
-          class="sidebar-menu"
-          :collapse="isSidebarCollapsed"
-          router
-          @select="handleMenuSelect"
-        >
-          <el-tooltip 
-            v-if="isSidebarCollapsed" 
-            class="box-item" 
-            effect="dark" 
-            content="仪表盘" 
-            placement="right"
-          >
-            <el-menu-item index="/">
-              <el-icon><House /></el-icon>
-              <span>仪表盘</span>
-            </el-menu-item>
-          </el-tooltip>
-          <el-menu-item v-else index="/">
-            <el-icon><House /></el-icon>
-            <span>仪表盘</span>
-          </el-menu-item>
-          
-          <el-sub-menu index="data">
-            <template #title>
-              <el-icon><Operation /></el-icon>
-              <span>基础数据</span>
-            </template>
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="车辆信息" 
-              placement="right"
-            >
-              <el-menu-item index="/data/vehicles">车辆信息</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/data/vehicles">车辆信息</el-menu-item>
-            
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="路线数据" 
-              placement="right"
-            >
-              <el-menu-item index="/data/routes">路线数据</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/data/routes">路线数据</el-menu-item>
-            
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="公司信息" 
-              placement="right"
-            >
-              <el-menu-item index="/data/companies">公司信息</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/data/companies">公司信息</el-menu-item>
-          </el-sub-menu>
-          
-          <el-sub-menu index="dispatch">
-            <template #title>
-              <el-icon><List /></el-icon>
-              <span>调度管理</span>
-            </template>
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="人工派车" 
-              placement="right"
-            >
-              <el-menu-item index="/dispatch/manual">人工派车</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/dispatch/manual">人工派车</el-menu-item>
-            
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="运输任务" 
-              placement="right"
-            >
-              <el-menu-item index="/dispatch/tasks">运输任务</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/dispatch/tasks">运输任务</el-menu-item>
-          </el-sub-menu>
-          
-          <el-sub-menu index="settings">
-            <template #title>
-              <el-icon><Setting /></el-icon>
-              <span>系统管理</span>
-            </template>
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="用户管理" 
-              placement="right"
-            >
-              <el-menu-item index="/settings/user">用户管理</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/settings/user">用户管理</el-menu-item>
-            
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="角色管理" 
-              placement="right"
-            >
-              <el-menu-item index="/settings/role">角色管理</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/settings/role">角色管理</el-menu-item>
-            
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="系统设置" 
-              placement="right"
-            >
-              <el-menu-item index="/settings/config">系统设置</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/settings/config">系统设置</el-menu-item>
-            
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="审计日志" 
-              placement="right"
-            >
-              <el-menu-item index="/settings/logs">审计日志</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/settings/logs">审计日志</el-menu-item>
-          </el-sub-menu>
-          
-          <el-sub-menu index="planning">
-            <template #title>
-              <el-icon><Calendar /></el-icon>
-              <span>规划管理</span>
-            </template>
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="运输计划" 
-              placement="right"
-            >
-              <el-menu-item index="/planning/schedule">运输计划</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/planning/schedule">运输计划</el-menu-item>
-            
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="路线优化" 
-              placement="right"
-            >
-              <el-menu-item index="/planning/optimization">路线优化</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/planning/optimization">路线优化</el-menu-item>
-          </el-sub-menu>
-          
-          <el-sub-menu index="reports">
-            <template #title>
-              <el-icon><Notebook /></el-icon>
-              <span>报表管理</span>
-            </template>
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="运输报表" 
-              placement="right"
-            >
-              <el-menu-item index="/reports/transport">运输报表</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/reports/transport">运输报表</el-menu-item>
-            
-            <el-tooltip 
-              v-if="isSidebarCollapsed" 
-              class="box-item" 
-              effect="dark" 
-              content="财务报表" 
-              placement="right"
-            >
-              <el-menu-item index="/reports/finance">财务报表</el-menu-item>
-            </el-tooltip>
-            <el-menu-item v-else index="/reports/finance">财务报表</el-menu-item>
-          </el-sub-menu>
-        </el-menu>
+        <!-- 使用动态菜单组件 -->
+         <dynamic-menu :is-collapse="isSidebarCollapsed" />
       </el-aside>
       
       <el-main class="main-content">
@@ -255,102 +60,39 @@
   </el-container>
 </template>
 
-<script>
-import {
-  House,
-  Operation,
-  List,
-  Setting,
-  User,
-  SwitchButton,
-  ArrowDown,
-  Calendar,
-  Notebook,
-  Fold,
-  Expand
-} from '@element-plus/icons-vue'
-import { authService } from '@/services/authService'
+<script setup>
+import { ref, computed } from 'vue';
+import { usePermissionStore } from '@/stores/permission';
+import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
+import { authService } from '@/services/authService';
+import { Expand, Fold, User, ArrowDown, Setting, SwitchButton } from '@element-plus/icons-vue';
+import DynamicMenu from '@/components/DynamicMenu.vue';
 
-export default {
-  name: 'MainLayout',
-  components: {
-    House,
-    Operation,
-    List,
-    Setting,
-    User,
-    SwitchButton,
-    ArrowDown,
-    Calendar,
-    Notebook,
-    Fold,
-    Expand
-  },
-  data() {
-    return {
-      activeMenu: '/',
-      isSidebarCollapsed: false,
-      currentUser: {},
-      currentUserRole: ''
-    }
-  },
-  watch: {
-    '$route'(to) {
-      this.activeMenu = to.path
-    }
-  },
-  mounted() {
-    // 检查用户是否已登录
-    this.checkAuth()
-    // 获取当前用户信息
-    this.getCurrentUser()
-  },
-  methods: {
-    checkAuth() {
-      if (!authService.isAuthenticated()) {
-        // 用户未登录，重定向到登录页面
-        this.$router.push('/login')
-      }
-    },
-    toggleSidebar() {
-      this.isSidebarCollapsed = !this.isSidebarCollapsed
-    },
-    handleMenuSelect(index) {
-      this.activeMenu = index
-    },
-    async getCurrentUser() {
-      try {
-        const user = JSON.parse(localStorage.getItem('user')) || {}
-        this.currentUser = user
-        
-        // 获取用户角色，如果有多个角色，显示第一个
-        if (user.roles && user.roles.length > 0) {
-          this.currentUserRole = user.roles[0].name || '系统管理员'
-        } else {
-          this.currentUserRole = '系统管理员'
-        }
-      } catch (error) {
-        console.error('获取用户信息失败:', error)
-        this.currentUser = {}
-        this.currentUserRole = '系统管理员'
-      }
-    },
-    async handleUserCommand(command) {
-      switch (command) {
-        case 'profile':
-          // 跳转到个人资料页面
-          break
-        case 'settings':
-          this.$router.push('/settings/config')
-          break
-        case 'logout':
-          await authService.logout()
-          this.$router.push('/login')
-          break
-      }
-    }
+const permissionStore = usePermissionStore();
+const router = useRouter();
+
+const isSidebarCollapsed = ref(false);
+
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+};
+
+const currentUser = computed(() => permissionStore.userInfo || {});
+const currentUserRole = computed(() => {
+  if (permissionStore.isAdmin) return '超级管理员';
+  return permissionStore.roles && permissionStore.roles.length > 0 ? permissionStore.roles[0] : '系统管理员';
+});
+
+const handleUserCommand = (command) => {
+  if (command === 'logout') {
+    authService.logout();
+    router.push('/login');
+    ElMessage.success('您已成功退出登录');
+  } else {
+    ElMessage.info(`点击了 ${command}`);
   }
-}
+};
 </script>
 
 <style scoped>
