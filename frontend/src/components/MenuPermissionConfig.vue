@@ -36,7 +36,7 @@
                 <el-icon v-if="data.icon" class="menu-icon">
                   <component :is="data.icon" />
                 </el-icon>
-                {{ node.label }}
+                {{ data.name }}
               </span>
               <span v-if="data.path" class="menu-path">{{ data.path }}</span>
             </span>
@@ -73,7 +73,7 @@ export default {
       filterText: '',
       defaultProps: {
         children: 'children',
-        label: 'title'
+        label: 'name'
       }
     }
   },
@@ -100,7 +100,7 @@ export default {
       this.loading = true
       try {
         // 获取所有菜单
-        const allMenusResponse = await apiService.get('/menus')
+        const allMenusResponse = await apiService.menus.getMenus()
         if (allMenusResponse.code === 200) {
           this.menus = allMenusResponse.data
         } else {
@@ -108,7 +108,7 @@ export default {
         }
         
         // 获取角色已有菜单权限
-        const roleMenusResponse = await apiService.get(`/roles/${this.role.id}/menus`)
+        const roleMenusResponse = await apiService.roles.getRoleMenus(this.role.id)
         if (roleMenusResponse.code === 200) {
           this.selectedMenus = roleMenusResponse.data.map(m => m.id)
         } else {
@@ -125,7 +125,7 @@ export default {
         const children = this.menus.filter(m => m.parent_id === menu.id)
         const node = {
           id: menu.id,
-          title: menu.title,
+          name: menu.name,
           path: menu.path,
           icon: menu.icon
         }
@@ -142,8 +142,8 @@ export default {
       try {
         const selectedMenuIds = this.$refs.menuTree.getCheckedKeys()
         
-        const response = await apiService.put(
-          `/roles/${this.role.id}/menus`, 
+        const response = await apiService.roles.updateRoleMenus(
+          this.role.id, 
           { menu_ids: selectedMenuIds }
         )
         
@@ -161,7 +161,7 @@ export default {
     },
     filterNode(value, data) {
       if (!value) return true
-      return data.title.toLowerCase().includes(value.toLowerCase())
+      return data.name.toLowerCase().includes(value.toLowerCase())
     }
   }
 }

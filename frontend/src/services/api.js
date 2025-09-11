@@ -244,6 +244,87 @@ export const apiService = {
     // 移除用户的角色
     removeRoleFromUserApi: (userId, roleId) => {
       return api.delete(`/users/${userId}/roles/${roleId}`)
+    },
+    
+    // 获取角色权限
+    getRolePermissions: (roleId) => {
+      return api.get(`/roles/${roleId}/permissions`)
+    },
+    
+    // 更新角色权限
+    updateRolePermissions: (roleId, permissionData) => {
+      return api.put(`/roles/${roleId}/permissions`, permissionData)
+    },
+    
+    // 获取角色菜单权限
+    getRoleMenus: (roleId) => {
+      return api.get(`/roles/${roleId}/menus`)
+    },
+    
+    // 更新角色菜单权限
+    updateRoleMenus: (roleId, menuData) => {
+      return api.put(`/roles/${roleId}/menus`, menuData)
+    }
+  },
+  
+  // 菜单管理相关API
+  menus: {
+    // 获取所有菜单
+    getMenus: () => {
+      return api.get('/menus')
+    },
+    
+    // 获取菜单详情
+    getMenu: (menuId) => {
+      return api.get(`/menus/${menuId}`)
+    },
+    
+    // 创建菜单
+    createMenu: (menuData) => {
+      return api.post('/menus', menuData)
+    },
+    
+    // 更新菜单
+    updateMenu: (menuId, menuData) => {
+      return api.put(`/menus/${menuId}`, menuData)
+    },
+    
+    // 删除菜单
+    deleteMenu: (menuId) => {
+      return api.delete(`/menus/${menuId}`)
+    },
+    
+    // 获取当前用户菜单
+    getCurrentUserMenus: () => {
+      return api.get('/menus/current-user')
+    }
+  },
+  
+  // 权限管理相关API
+  permissions: {
+    // 获取权限列表
+    getPermissions: (params) => {
+      return api.get('/permissions', { params })
+    },
+    
+    // 获取权限详情
+    getPermission: (permissionId) => {
+      return api.get(`/permissions/${permissionId}`)
+    },
+    
+    // 创建权限
+    createPermission: (permissionData) => {
+      return api.post('/permissions', permissionData)
+    },
+    
+    // 更新权限
+    updatePermission: (permissionId, permissionData) => {
+      return api.put(`/permissions/${permissionId}`, permissionData)
+    },
+    
+    // 删除权限
+    deletePermission: (permissionId) => {
+      return api.delete(`/permissions/${permissionId}`)
     }
   }
 }

@@ -29,8 +29,14 @@ def create_app(config_name='development'):
     from .extensions import init_extensions
     init_extensions(app)
     
-    # 启用CORS并应用配置
-    CORS(app, origins=app.config.get('CORS_ORIGINS', '*'))
+    # 启用CORS并应用配置（允许Authorization等预检头，支持凭证）
+    CORS(
+        app,
+        origins=app.config.get('CORS_ORIGINS', '*'),
+        supports_credentials=True,
+        allow_headers=['Content-Type', 'Authorization'],
+        expose_headers=['Content-Disposition']
+    )
     
     # 注册蓝图
     register_blueprints(app)
@@ -63,6 +69,6 @@ def register_blueprints(app):
     from .dispatch import dispatch_bp
     app.register_blueprint(dispatch_bp, url_prefix='/api/v1/dispatch')
     
-    # API v1模块
+    # API v1模块（避免重复加前缀，这里不再额外指定url_prefix）
     from .api.v1 import api_v1_bp
-    app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
+    app.register_blueprint(api_v1_bp)

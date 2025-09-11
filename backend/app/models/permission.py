@@ -88,6 +88,11 @@ class Permission(db.Model):
             # 调度管理权限
             {'name': '查看订单', 'code': 'order:read', 'description': '查看运输订单', 'resource_type': 'api', 'resource_id': '/orders', 'action': 'read'},
             {'name': '创建调度', 'code': 'dispatch:create', 'description': '创建调度任务', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'write'},
+            {'name': '查看调度', 'code': 'dispatch:read', 'description': '查看调度任务列表与详情', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'read'},
+            {'name': '更新调度', 'code': 'dispatch:update', 'description': '更新调度任务信息', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'write'},
+            {'name': '审核调度', 'code': 'dispatch:approve', 'description': '审核与批准调度任务', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'execute'},
+            {'name': '派发调度', 'code': 'dispatch:assign', 'description': '指派车辆与司机', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'execute'},
+            {'name': '完成调度', 'code': 'dispatch:complete', 'description': '标记调度任务完成', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'execute'},
             {'name': '查看跟踪', 'code': 'tracking:read', 'description': '查看运输跟踪信息', 'resource_type': 'api', 'resource_id': '/tracking', 'action': 'read'}
         ]
     

@@ -6,8 +6,11 @@
 import sys
 import os
 
-# 添加项目路径
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 添加项目根路径（tests 的上一级目录）
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
 
 from app import create_app
 

@@ -12,12 +12,14 @@ from .permission_cache_service import PermissionCacheService
 from .permission_service import PermissionService
 from .menu_service import MenuService
 from .role_permission_service import RolePermissionService
+from .vehicle.vehicle_service import VehicleService
 
 __all__ = [
     'AuthService',
     'UserService', 
     'CompanyService',
     'RoleService',
+    'VehicleService',
     'PermissionCacheService',
     # 权限相关服务
     'PermissionService',

@@ -8,14 +8,16 @@ from .company import Company
 from .role import Role
 from .user_role import user_role
 from .task import ManualDispatchTask
-from .vehicle import Vehicle
+from .vehicle.vehicle import Vehicle
 from .dispatch_status_history import DispatchStatusHistory
-from .vehicle_capacity_reference import VehicleCapacityReference
+from .vehicle.vehicle_capacity_reference import VehicleCapacityReference
 # 权限相关模型
 from .permission import Permission
 from .menu import Menu
 from .role_permission import RolePermission
 from .menu_permission import MenuPermission
+# 调度相关模型
+from .dispatch.operation_log import OperationLog
 
 __all__ = [
     'User',
@@ -30,5 +32,7 @@ __all__ = [
     'Permission',
     'Menu',
     'RolePermission',
-    'MenuPermission'
+    'MenuPermission',
+    # 调度相关模型
+    'OperationLog'
 ]

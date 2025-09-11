@@ -133,7 +133,7 @@
       width="500px"
     >
       <el-form
-        ref="menuForm"
+        ref="menuFormRef"
         :model="menuForm"
         :rules="menuRules"
         label-width="100px"
@@ -276,7 +276,8 @@ const loading = ref(false)
 // 菜单表单相关
 const menuDialogVisible = ref(false)
 const isEdit = ref(false)
-const menuForm = reactive({
+const menuFormRef = ref(null)
+const menuForm = ref({
   id: null,
   name: '',
   code: '',
@@ -346,7 +347,7 @@ function formatDateTime(dateString) {
 async function loadMenus() {
   try {
     loading.value = true
-    const response = await apiService.get('/menus')
+    const response = await apiService.menus.getMenus()
     if (response.code === 200) {
       menus.value = response.data || []
       filteredMenus.value = menus.value
@@ -364,42 +365,51 @@ async function loadMenus() {
   }
 }
 
-// 搜索菜单
+// 搜索菜单 - 使用防抖优化
+let searchTimeout = null
 function handleSearch() {
-  if (!searchKeyword.value) {
-    filteredMenus.value = menus.value
-    return
+  // 清除之前的定时器
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
   }
   
-  const keyword = searchKeyword.value.toLowerCase()
-  
-  // 递归搜索函数
-  function searchInTree(nodes) {
-    const result = []
-    
-    for (const node of nodes) {
-      // 创建节点副本，避免修改原始数据
-      const nodeCopy = { ...node }
-      
-      // 检查当前节点是否匹配
-      const nameMatch = nodeCopy.name && nodeCopy.name.toLowerCase().includes(keyword)
-      const codeMatch = nodeCopy.code && nodeCopy.code.toLowerCase().includes(keyword)
-      
-      // 递归搜索子节点
-      if (nodeCopy.children && nodeCopy.children.length > 0) {
-        nodeCopy.children = searchInTree(nodeCopy.children)
-      }
-      
-      // 如果当前节点匹配或者子节点中有匹配项，则保留该节点
-      if (nameMatch || codeMatch || (nodeCopy.children && nodeCopy.children.length > 0)) {
-        result.push(nodeCopy)
-      }
+  // 设置新的定时器，延迟执行搜索
+  searchTimeout = setTimeout(() => {
+    if (!searchKeyword.value) {
+      filteredMenus.value = menus.value
+      return
     }
     
-    return result
-  }
-  
-  filteredMenus.value = searchInTree(menus.value)
+    const keyword = searchKeyword.value.toLowerCase()
+    
+    // 递归搜索函数
+    function searchInTree(nodes) {
+      const result = []
+      
+      for (const node of nodes) {
+        // 创建节点副本，避免修改原始数据
+        const nodeCopy = { ...node }
+        
+        // 检查当前节点是否匹配
+        const nameMatch = nodeCopy.name && nodeCopy.name.toLowerCase().includes(keyword)
+        const codeMatch = nodeCopy.code && nodeCopy.code.toLowerCase().includes(keyword)
+        
+        // 递归搜索子节点
+        if (nodeCopy.children && nodeCopy.children.length > 0) {
+          nodeCopy.children = searchInTree(nodeCopy.children)
+        }
+        
+        // 如果当前节点匹配或者子节点中有匹配项，则保留该节点
+        if (nameMatch || codeMatch || (nodeCopy.children && nodeCopy.children.length > 0)) {
+          result.push(nodeCopy)
+        }
+      }
+      
+      return result
+    }
+    
+    filteredMenus.value = searchInTree(menus.value)
+  }, 300) // 300ms 防抖延迟
 }
 
 // 处理节点点击
@@ -412,8 +422,9 @@ function handleNodeClick(data) {
 async function loadMenuPermissions(menuId) {
   try {
     permissionsLoading.value = true
-    const response = await apiService.get(`/menus/${menuId}/permissions`)
+    const response = await apiService.menus.getMenu(menuId)
     if (response.code === 200) {
+      // 如果API返回菜单权限信息，使用它；否则设为空数组
       menuPermissions.value = response.data.permissions || []
     } else {
       ElMessage.error(response.message || '获取菜单权限失败')
@@ -429,7 +440,7 @@ async function loadMenuPermissions(menuId) {
 // 显示添加菜单对话框
 function showAddMenuDialog() {
   isEdit.value = false
-  Object.assign(menuForm, {
+  menuForm.value = {
     id: null,
     name: '',
     code: '',
@@ -439,14 +450,14 @@ function showAddMenuDialog() {
     parent_id: null,
     sort_order: 0,
     is_active: true
-  })
+  }
   menuDialogVisible.value = true
 }
 
 // 显示编辑菜单对话框
 function showEditMenuDialog(menu) {
   isEdit.value = true
-  Object.assign(menuForm, {
+  menuForm.value = {
     id: menu.id,
     name: menu.name,
     code: menu.code,
@@ -456,23 +467,39 @@ function showEditMenuDialog(menu) {
     parent_id: menu.parent_id,
     sort_order: menu.sort_order || 0,
     is_active: menu.is_active
-  })
+  }
   menuDialogVisible.value = true
 }
 
 // 提交菜单表单
 async function submitMenuForm() {
+  // 先进行表单验证
+  if (!menuFormRef.value) {
+    ElMessage.error('表单引用不存在')
+    return
+  }
+  
   try {
+    // 验证表单
+    await menuFormRef.value.validate()
+  } catch (error) {
+    ElMessage.error('请检查表单输入')
+    return
+  }
+  
+  try {
+    const formData = { ...menuForm.value }
+    
     // 检查是否选择了自己作为父菜单
-    if (isEdit.value && menuForm.id === menuForm.parent_id) {
+    if (isEdit.value && formData.id === formData.parent_id) {
       ElMessage.error('不能选择自己作为父菜单')
       return
     }
     
     // 检查是否会形成循环引用
-    if (isEdit.value && menuForm.parent_id) {
-      const parentMenu = findMenuById(menus.value, menuForm.parent_id)
-      if (isChildOf(parentMenu, menuForm.id)) {
+    if (isEdit.value && formData.parent_id) {
+      const parentMenu = findMenuById(menus.value, formData.parent_id)
+      if (isChildOf(parentMenu, formData.id)) {
         ElMessage.error('不能选择子菜单作为父菜单，这会导致循环引用')
         return
       }
@@ -481,29 +508,37 @@ async function submitMenuForm() {
     let response
     if (isEdit.value) {
       // 更新菜单
-      response = await apiService.put(`/menus/${menuForm.id}`, menuForm)
+      response = await apiService.menus.updateMenu(formData.id, formData)
     } else {
       // 创建菜单
-      response = await apiService.post('/menus', menuForm)
+      response = await apiService.menus.createMenu(formData)
     }
     
     if (response.code === 200 || response.code === 201) {
       ElMessage.success(isEdit.value ? '菜单更新成功' : '菜单创建成功')
       menuDialogVisible.value = false
+      
+      // 清除缓存
+      cachedMenuOptions = null
+      
       await loadMenus()
       
       // 如果是编辑模式，重新选中该菜单
       if (isEdit.value) {
-        const updatedMenu = findMenuById(menus.value, menuForm.id)
+        const updatedMenu = findMenuById(menus.value, formData.id)
         if (updatedMenu) {
           selectedMenu.value = updatedMenu
           await nextTick()
-          menuTree.value.setCurrentKey(menuForm.id)
+          if (menuTree.value) {
+            menuTree.value.setCurrentKey(formData.id)
+          }
         }
       }
       
       // 刷新权限状态
-      await permissionStore.refreshPermissions()
+      if (permissionStore.refreshPermissions) {
+        await permissionStore.refreshPermissions()
+      }
     } else {
       ElMessage.error(response.message || (isEdit.value ? '菜单更新失败' : '菜单创建失败'))
     }
@@ -533,7 +568,7 @@ function confirmDeleteMenu(menu) {
 // 删除菜单
 async function deleteMenu(menuId) {
   try {
-    const response = await apiService.delete(`/menus/${menuId}?force=true`)
+    const response = await apiService.menus.deleteMenu(menuId)
     if (response.code === 200) {
       ElMessage.success('菜单删除成功')
       
@@ -543,10 +578,15 @@ async function deleteMenu(menuId) {
         menuPermissions.value = []
       }
       
+      // 清除缓存
+      cachedMenuOptions = null
+      
       await loadMenus()
       
       // 刷新权限状态
-      await permissionStore.refreshPermissions()
+      if (permissionStore.refreshPermissions) {
+        await permissionStore.refreshPermissions()
+      }
     } else {
       ElMessage.error(response.message || '菜单删除失败')
     }
@@ -642,16 +682,40 @@ function isChildOf(menu, parentId) {
   return false
 }
 
-// 计算菜单选项（用于父菜单选择）
+// 计算菜单选项（用于父菜单选择）- 使用缓存优化
+let cachedMenuOptions = null
+let lastMenusLength = 0
+let lastEditId = null
+
 const menuOptions = computed(() => {
-  // 如果是编辑模式，需要排除自己及其子菜单
-  if (isEdit.value) {
-    return filterMenuOptions(menus.value, menuForm.id)
+  const currentMenusLength = menus.value.length
+  const currentEditId = isEdit.value ? menuForm.value.id : null
+  
+  // 如果数据没有变化，返回缓存的结果
+  if (cachedMenuOptions && 
+      lastMenusLength === currentMenusLength && 
+      lastEditId === currentEditId) {
+    return cachedMenuOptions
   }
-  return menus.value
+  
+  // 重新计算菜单选项
+  let result
+  if (isEdit.value && menuForm.value.id) {
+    result = filterMenuOptions(menus.value, menuForm.value.id)
+  } else {
+    // 添加模式下，可以选择所有菜单作为父级菜单，包括父级菜单本身
+    result = menus.value
+  }
+  
+  // 更新缓存
+  cachedMenuOptions = result
+  lastMenusLength = currentMenusLength
+  lastEditId = currentEditId
+  
+  return result
 })
 
-// 过滤菜单选项，排除自己及其子菜单
+// 过滤菜单选项，排除自己及其子菜单（仅在编辑模式下）
 function filterMenuOptions(menuList, excludeId) {
   return menuList
     .filter(menu => menu.id !== excludeId)

@@ -32,10 +32,11 @@ const routes = [
       {
         path: '/basic-data/vehicles',
         name: 'Vehicles',
-        component: ComingSoon,
+        component: () => import('../pages/vehicle/VehicleManagement.vue'),
         meta: {
           title: '车辆管理',
-          menuCode: 'vehicle_management'
+          menuCode: 'vehicle_management',
+          permissions: ['vehicle:read']
         }
       },
       {
@@ -69,7 +70,7 @@ const routes = [
       {
         path: '/dispatch/tasks',
         name: 'DispatchTasks',
-        component: ComingSoon,
+        component: () => import('../pages/dispatch/DispatchTasks.vue'),
         meta: {
           title: '调度任务',
           menuCode: 'dispatch_tasks'
