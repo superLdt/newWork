@@ -1,120 +1,519 @@
 <template>
   <div class="task-detail-container">
-    <el-descriptions title="基本信息" :column="2" border>
-      <el-descriptions-item label="任务ID">{{ task.task_id }}</el-descriptions-item>
-      <el-descriptions-item label="需求日期">{{ task.required_date }}</el-descriptions-item>
-      <el-descriptions-item label="起始站段">{{ task.start_bureau }}</el-descriptions-item>
-      <el-descriptions-item label="路线方向">{{ task.route_direction }}</el-descriptions-item>
-      <el-descriptions-item label="运输公司">{{ task.carrier_company }}</el-descriptions-item>
-      <el-descriptions-item label="路线名称">{{ task.route_name }}</el-descriptions-item>
-      <el-descriptions-item label="运输类型">{{ task.transport_type }}</el-descriptions-item>
-      <el-descriptions-item label="需求类型">{{ task.requirement_type }}</el-descriptions-item>
-      <el-descriptions-item label="需求容积">{{ task.volume }}</el-descriptions-item>
-      <el-descriptions-item label="需求重量">{{ task.weight }}</el-descriptions-item>
-      <el-descriptions-item label="派车轨道">{{ task.dispatch_track }}</el-descriptions-item>
-      <el-descriptions-item label="任务状态">
-        <el-tag :type="getStatusType(task.status)">{{ task.status }}</el-tag>
-      </el-descriptions-item>
-    </el-descriptions>
-    
-    <el-divider content-position="left">特殊要求</el-divider>
-    <div class="special-requirements">
-      {{ task.special_requirements || '无' }}
+    <!-- 当前操作状态提示栏 -->
+    <div class="status-alert" :class="getStatusAlertClass(task.status)">
+      <div class="alert-content">
+        <el-icon class="alert-icon"><Warning /></el-icon>
+        <div class="alert-text">
+          <div class="current-status">当前状态：{{ getStatusText(task.status) }}</div>
+          <div class="next-action">{{ getNextActionHint(task.status, currentUserRole) }}</div>
+        </div>
+      </div>
     </div>
-    
-    <el-divider content-position="left">发起人信息</el-divider>
-    <el-descriptions :column="2" border>
-      <el-descriptions-item label="发起人角色">{{ task.initiator_role }}</el-descriptions-item>
-      <el-descriptions-item label="发起人部门">{{ task.initiator_department }}</el-descriptions-item>
-    </el-descriptions>
-    
-    <template v-if="task.vehicles && task.vehicles.length > 0">
-      <el-divider content-position="left">分配车辆信息</el-divider>
-      <el-table :data="task.vehicles" style="width: 100%" border>
-        <el-table-column prop="vehicle_id" label="车辆ID" width="120"></el-table-column>
-        <el-table-column prop="plate_number" label="车牌号" width="120"></el-table-column>
-        <el-table-column prop="driver_name" label="司机姓名" width="120"></el-table-column>
-        <el-table-column prop="driver_phone" label="司机电话" width="150"></el-table-column>
-        <el-table-column prop="vehicle_type" label="车型" width="100"></el-table-column>
-        <el-table-column prop="capacity" label="载重量" width="100"></el-table-column>
-        <el-table-column prop="volume" label="容积" width="100"></el-table-column>
-        <el-table-column prop="notes" label="备注"></el-table-column>
-      </el-table>
-    </template>
-    
-    <template v-if="task.status_history && task.status_history.length > 0">
-      <el-divider content-position="left">状态历史</el-divider>
-      <el-timeline>
-        <el-timeline-item
-          v-for="(history, index) in task.status_history"
-          :key="index"
-          :timestamp="history.timestamp"
-          :type="getTimelineItemType(history.status)"
+
+    <!-- 任务概览卡片 -->
+    <div class="overview-card">
+      <div class="overview-header">
+        <div class="task-title">
+          <h2>{{ task.mail_route_name }}</h2>
+          <el-tag :type="getStatusType(task.status)" size="large" class="status-tag">
+            {{ getStatusText(task.status) }}
+          </el-tag>
+        </div>
+        <div class="task-id">任务编号: {{ task.task_id }}</div>
+      </div>
+      
+      <div class="overview-stats">
+        <div class="stat-item">
+          <div class="stat-label">需求日期</div>
+          <div class="stat-value">{{ task.required_date }}</div>
+          <div class="stat-time" v-if="task.required_time">{{ task.required_time }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">发起时间</div>
+          <div class="stat-value">{{ formatDateTime(task.created_at || task.created_time) }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">运输类型</div>
+          <div class="stat-value">{{ task.transport_type }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">标准吨位</div>
+          <div class="stat-value">{{ task.standard_weight }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">标准容积</div>
+          <div class="stat-value">{{ task.standard_volume }} m³</div>
+        </div>
+      </div>
+
+      <!-- 角色差异化操作按钮 -->
+      <div class="action-buttons" v-if="hasAvailableActions">
+        <el-button 
+          v-for="action in availableActions" 
+          :key="action.key"
+          :type="action.type" 
+          :icon="action.icon"
+          size="large"
+          @click="handleAction(action.key)"
+          :loading="loadingActions[action.key]"
         >
-          <h4>{{ history.status }}</h4>
-          <p>操作人: {{ history.operator }}</p>
-          <p>备注: {{ history.comment || '无' }}</p>
-        </el-timeline-item>
-      </el-timeline>
+          {{ action.label }}
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 详细信息网格 -->
+    <div class="detail-grid">
+      <!-- 基本信息 -->
+      <div class="detail-card">
+        <div class="card-header">
+          <el-icon><Document /></el-icon>
+          <span>基本信息</span>
+        </div>
+        <div class="card-content">
+          <div class="info-row">
+            <label>始发局:</label>
+            <span>{{ task.origin_bureau }}</span>
+          </div>
+          <div class="info-row">
+            <label>组织单位:</label>
+            <span>{{ task.organizing_unit }}</span>
+          </div>
+          <div class="info-row">
+            <label>需求类型:</label>
+            <span>{{ task.requirement_type }}</span>
+          </div>
+          <div class="info-row">
+            <label>派车轨道:</label>
+            <span>{{ task.dispatch_track }}</span>
+          </div>
+          <div class="info-row">
+            <label>实际容积:</label>
+            <span>{{ task.actual_volume }} m³</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 发起人信息 -->
+      <div class="detail-card">
+        <div class="card-header">
+          <el-icon><User /></el-icon>
+          <span>发起人信息</span>
+        </div>
+        <div class="card-content">
+          <div class="info-row">
+            <label>发起人角色:</label>
+            <span>{{ task.initiator_role }}</span>
+          </div>
+          <div class="info-row">
+            <label>发起人部门:</label>
+            <span>{{ task.initiator_department }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 特殊要求 -->
+      <div class="detail-card full-width" v-if="task.special_requirements">
+        <div class="card-header">
+          <el-icon><Warning /></el-icon>
+          <span>特殊要求</span>
+        </div>
+        <div class="card-content">
+          <div class="special-requirements">
+            {{ task.special_requirements }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 分配车辆信息 -->
+    <template v-if="task.vehicles && task.vehicles.length > 0">
+      <div class="section-header">
+        <el-icon><Van /></el-icon>
+        <span>分配车辆信息</span>
+        <div class="vehicle-count">共 {{ task.vehicles.length }} 辆</div>
+      </div>
+      
+      <div class="vehicle-grid">
+        <div class="vehicle-card" v-for="vehicle in task.vehicles" :key="vehicle.vehicle_id">
+          <div class="vehicle-header">
+            <div class="vehicle-plate">{{ vehicle.plate_number }}</div>
+            <el-tag size="small" type="success">{{ vehicle.vehicle_type }}</el-tag>
+          </div>
+          <div class="vehicle-info">
+            <div class="info-item">
+              <el-icon><UserFilled /></el-icon>
+              <span>{{ vehicle.driver_name }}</span>
+            </div>
+            <div class="info-item">
+              <el-icon><Phone /></el-icon>
+              <span>{{ vehicle.driver_phone }}</span>
+            </div>
+            <div class="info-item">
+              <el-icon><Box /></el-icon>
+              <span>载重: {{ vehicle.capacity }} 吨</span>
+            </div>
+            <div class="info-item">
+              <el-icon><Box /></el-icon>
+              <span>容积: {{ vehicle.volume }} m³</span>
+            </div>
+          </div>
+          <div class="vehicle-notes" v-if="vehicle.notes">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>{{ vehicle.notes }}</span>
+          </div>
+        </div>
+      </div>
     </template>
+
+    <!-- 状态历史 -->
+    <template v-if="task.status_history && task.status_history.length > 0">
+      <div class="section-header">
+        <el-icon><Clock /></el-icon>
+        <span>状态历史</span>
+      </div>
+      
+      <div class="timeline-container">
+        <el-timeline>
+          <el-timeline-item
+            v-for="(history, index) in task.status_history"
+            :key="index"
+            :timestamp="formatDateTime(history.timestamp)"
+            :type="getTimelineItemType(history.status)"
+            :hollow="index !== 0"
+            size="large"
+          >
+            <div class="timeline-content">
+              <div class="timeline-title">{{ history.status }}</div>
+              <div class="timeline-info">
+                <div class="operator">操作人: {{ userFullNames[normalizeUserId(history.operator)] || normalizeUserId(history.operator) }}</div>
+                <div class="comment" v-if="history.comment">{{ history.comment }}</div>
+              </div>
+            </div>
+          </el-timeline-item>
+        </el-timeline>
+      </div>
+    </template>
+
+    <!-- 操作确认对话框 -->
+    <el-dialog
+      v-model="actionDialogVisible"
+      :title="currentAction?.label"
+      width="500px"
+    >
+      <el-form :model="actionForm" label-width="80px">
+        <el-form-item label="备注">
+          <el-input
+            v-model="actionForm.comment"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入操作备注..."
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="actionDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmAction" :loading="submitting">
+          确认{{ currentAction?.label }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script>
+import { ref, computed, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Document, User, Warning, Van, UserFilled, Phone, Box, Clock, 
+  ChatDotRound, Check, Close, Position, Select, CircleCheck, Promotion
+} from '@element-plus/icons-vue'
+import { usePermissionStore } from '@/stores/permission'
+import { apiService } from '@/services/api'
+
 export default {
   name: 'TaskDetail',
+  components: {
+    Document,
+    User,
+    Warning,
+    Van,
+    UserFilled,
+    Phone,
+    Box,
+    Clock,
+    ChatDotRound
+  },
   props: {
     task: {
       type: Object,
       required: true
     }
   },
-  setup() {
+  setup(props, { emit }) {
+    const permissionStore = usePermissionStore()
+    const actionDialogVisible = ref(false)
+    const currentAction = ref(null)
+    const submitting = ref(false)
+    const loadingActions = reactive({})
+    const userFullNames = reactive({}) // 用于存储用户ID到姓名的映射
+
+    // 规范化提取用户ID：从任意字符串中提取第一个数字序列
+    const normalizeUserId = (raw) => {
+      if (raw === null || raw === undefined) return ''
+      const s = String(raw)
+      const m = s.match(/\d+/)
+      return m ? m[0] : s.trim()
+    }
+
+    // 获取用户完整姓名（兼容写法）
+    const fetchUserFullName = async (rawId) => {
+      if (rawId === null || rawId === undefined) return ''
+      const userId = normalizeUserId(rawId)
+      const rawKey = String(rawId)
+      if (!userId) return rawKey
+      // 命中缓存（用规范化后的ID）
+      if (userFullNames[userId] !== undefined) return userFullNames[userId]
+
+      try {
+        const resp = await apiService.users.getUser(userId)
+        const data = resp.data
+         const fullName = data?.full_name || data?.name || data?.username || userId
+         // 双写缓存：既按标准ID存，也按原始字符串存，保证模板索引稳定
+         userFullNames[userId] = fullName
+         userFullNames[rawKey] = fullName
+         return fullName
+      } catch {
+        // 兜底：至少把原始值写入原始键，避免多次请求
+        userFullNames[rawKey] = rawKey
+        return rawKey
+      }
+    }
+  
+    const actionForm = reactive({
+      comment: ''
+    })
+  
+    // 获取当前用户角色
+    const currentUserRole = computed(() => {
+      const userInfo = permissionStore.userInfo
+      if (userInfo && userInfo.roles && userInfo.roles.length > 0) {
+        return userInfo.roles[0].name || 'regional_dispatcher'
+      }
+      return 'regional_dispatcher' // 默认角色
+    })
+
+    // 角色权限映射
+    const roleActionMap = {
+      regional_dispatcher: [
+        { key: 'approve', label: '审批通过', type: 'primary', icon: Check, status: ['pending'] },
+        { key: 'reject', label: '拒绝', type: 'danger', icon: Close, status: ['pending'] }
+      ],
+      supplier: [
+        { key: 'respond', label: '响应接单', type: 'success', icon: Position, status: ['approved'] }
+      ],
+      team_leader: [
+        { key: 'confirm', label: '确认接单', type: 'warning', icon: CircleCheck, status: ['assigned'] }
+      ],
+      outsourcing_manager: [
+        { key: 'final_confirm', label: '最终确认', type: 'success', icon: Select, status: ['confirmed'] }
+      ],
+      workshop_dispatcher: [
+        { key: 'depart_confirm', label: '发车确认', type: 'primary', icon: Promotion, status: ['final_confirmed'] }
+      ]
+    }
+
+    // 可用操作按钮
+    const availableActions = computed(() => {
+      const actions = roleActionMap[currentUserRole.value] || []
+      return actions.filter(action => action.status.includes(props.task.status))
+    })
+
+    const hasAvailableActions = computed(() => availableActions.value.length > 0)
+
+    // 状态文本映射
+    const statusTextMap = {
+      pending: '待审核',
+      approved: '已审批',
+      rejected: '已拒绝',
+      assigned: '已分配',
+      confirmed: '已确认',
+      final_confirmed: '最终确认',
+      departed: '已发车',
+      completed: '已完成',
+      cancelled: '已取消'
+    }
+
+    // 状态提示样式
+    const getStatusAlertClass = (status) => {
+      const classMap = {
+        pending: 'status-pending',
+        approved: 'status-approved',
+        rejected: 'status-rejected',
+        assigned: 'status-assigned',
+        confirmed: 'status-confirmed',
+        final_confirmed: 'status-final-confirmed',
+        departed: 'status-departed',
+        completed: 'status-completed',
+        cancelled: 'status-cancelled'
+      }
+      return classMap[status] || 'status-info'
+    }
+
+    // 获取状态文本
+    const getStatusText = (status) => {
+      return statusTextMap[status] || status
+    }
+
+    // 获取下一步操作提示
+    const getNextActionHint = (status, role) => {
+      const hintMap = {
+        pending: {
+          regional_dispatcher: '请审核此任务',
+          supplier: '等待区域调度员审核',
+          team_leader: '等待区域调度员审核',
+          outsourcing_manager: '等待区域调度员审核',
+          workshop_dispatcher: '等待区域调度员审核'
+        },
+        approved: {
+          regional_dispatcher: '任务已审批，等待供应商响应',
+          supplier: '请响应此任务',
+          team_leader: '等待供应商响应',
+          outsourcing_manager: '等待供应商响应',
+          workshop_dispatcher: '等待供应商响应'
+        },
+        assigned: {
+          regional_dispatcher: '任务已分配，等待班组长确认',
+          supplier: '任务已分配，等待班组长确认',
+          team_leader: '请确认此任务',
+          outsourcing_manager: '等待班组长确认',
+          workshop_dispatcher: '等待班组长确认'
+        },
+        confirmed: {
+          regional_dispatcher: '任务已确认，等待最终确认',
+          supplier: '任务已确认，等待最终确认',
+          team_leader: '任务已确认，等待最终确认',
+          outsourcing_manager: '请进行最终确认',
+          workshop_dispatcher: '等待最终确认'
+        },
+        final_confirmed: {
+          regional_dispatcher: '任务已最终确认，等待发车',
+          supplier: '任务已最终确认，等待发车',
+          team_leader: '任务已最终确认，等待发车',
+          outsourcing_manager: '任务已最终确认，等待发车',
+          workshop_dispatcher: '请确认发车'
+        },
+        departed: '任务已发车',
+        completed: '任务已完成',
+        rejected: '任务已被拒绝',
+        cancelled: '任务已取消'
+      }
+      
+      if (status === 'departed' || status === 'completed' || status === 'rejected' || status === 'cancelled') {
+        return hintMap[status]
+      }
+      
+      return hintMap[status]?.[role] || '等待处理'
+    }
+
     // 获取状态类型
     const getStatusType = (status) => {
       const statusMap = {
-        'pending': 'info',
-        'approved': 'success',
-        'rejected': 'danger',
-        'assigned': 'primary',
-        'in_progress': 'warning',
-        'completed': 'success',
-        'cancelled': 'danger',
-        '待审核': 'info',
-        '已审核': 'success',
-        '已拒绝': 'danger',
-        '已分配': 'primary',
-        '进行中': 'warning',
-        '已完成': 'success',
-        '已取消': 'danger'
+        pending: 'info',
+        approved: 'success',
+        rejected: 'danger',
+        assigned: 'primary',
+        confirmed: 'warning',
+        final_confirmed: 'success',
+        departed: 'primary',
+        completed: 'success',
+        cancelled: 'danger'
       }
       return statusMap[status] || 'info'
     }
-    
+
     // 获取时间线项目类型
     const getTimelineItemType = (status) => {
-      const typeMap = {
-        'pending': 'info',
-        'approved': 'success',
-        'rejected': 'danger',
-        'assigned': 'primary',
-        'in_progress': 'warning',
-        'completed': 'success',
-        'cancelled': 'danger',
-        '待审核': 'info',
-        '已审核': 'success',
-        '已拒绝': 'danger',
-        '已分配': 'primary',
-        '进行中': 'warning',
-        '已完成': 'success',
-        '已取消': 'danger'
-      }
-      return typeMap[status] || 'info'
+      return getStatusType(status)
     }
-    
+
+    // 格式化日期时间
+    const formatDateTime = (timestamp) => {
+      if (!timestamp) return ''
+      const date = new Date(timestamp)
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+
+    // 处理操作
+    const handleAction = (actionKey) => {
+      const action = availableActions.value.find(a => a.key === actionKey)
+      if (action) {
+        currentAction.value = action
+        actionForm.comment = ''
+        actionDialogVisible.value = true
+      }
+    }
+
+    // 确认操作
+    const confirmAction = async () => {
+      if (!currentAction.value) return
+      
+      submitting.value = true
+      loadingActions[currentAction.value.key] = true
+
+      try {
+        // 模拟API调用
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        ElMessage.success(`${currentAction.value.label}成功`)
+        actionDialogVisible.value = false
+        
+        // 通知父组件刷新数据
+        emit('task-updated', {
+          action: currentAction.value.key,
+          comment: actionForm.comment
+        })
+      } catch (error) {
+        ElMessage.error(`${currentAction.value.label}失败`)
+      } finally {
+        submitting.value = false
+        loadingActions[currentAction.value.key] = false
+      }
+    }
+
+    onMounted(() => {
+      if (props.task.status_history) {
+        props.task.status_history.forEach(history => {
+          fetchUserFullName(history.operator)
+        })
+      }
+    })
+
     return {
+      currentUserRole,
+      availableActions,
+      hasAvailableActions,
+      loadingActions,
+      actionDialogVisible,
+      currentAction,
+      actionForm,
+      getStatusAlertClass,
+      getStatusText,
+      getNextActionHint,
       getStatusType,
-      getTimelineItemType
+      getTimelineItemType,
+      formatDateTime,
+      handleAction,
+      confirmAction,
+      userFullNames,
+      normalizeUserId
     }
   }
 }
@@ -122,17 +521,145 @@ export default {
 
 <style scoped>
 .task-detail-container {
+  padding: 16px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8f0fe 100%);
+  min-height: auto;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* 状态提示栏样式 */
+.status-alert {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid;
+}
+
+/* 任务概览卡片 */
+.overview-card {
+  background: white;
+  border-radius: 16px;
   padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(24, 144, 255, 0.1);
 }
 
-.special-requirements {
-  padding: 10px;
-  background-color: #f8f8f8;
-  border-radius: 4px;
-  min-height: 60px;
+.overview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
 }
 
-.el-divider {
-  margin: 24px 0;
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8faff 0%, #e6f7ff 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(24, 144, 255, 0.2);
+}
+
+/* 操作按钮区域 */
+.action-buttons {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 12px;
+  background: linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%);
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+.action-buttons .el-button {
+  min-width: 100px;
+  height: 40px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+/* 详情网格 */
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.detail-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(24, 144, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.card-content {
+  color: #666;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* 车辆信息样式 */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.vehicle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.vehicle-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(24, 144, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+/* 时间线样式 */
+.timeline-container {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(24, 144, 255, 0.1);
 }
 </style>

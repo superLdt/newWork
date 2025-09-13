@@ -129,7 +129,7 @@ export default {
           ipAddress: '192.168.1.100'
         }
       ],
-      dateRange: '',
+      dateRange: null,
       userFilter: '',
       actionFilter: '',
       currentPage: 1,

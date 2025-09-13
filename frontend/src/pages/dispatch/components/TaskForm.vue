@@ -10,70 +10,88 @@
       <el-form-item label="需求日期" prop="required_date">
         <el-date-picker
           v-model="formData.required_date"
-          type="date"
-          placeholder="选择需求日期"
-          format="YYYY-MM-DD"
-          value-format="YYYY-MM-DD"
+          type="datetime"
+          placeholder="选择需求日期和时间"
+          format="YYYY-MM-DD HH:mm"
+          value-format="YYYY-MM-DD HH:mm:ss"
         ></el-date-picker>
       </el-form-item>
       
-      <el-form-item label="起始站段" prop="start_bureau">
-        <el-input v-model="formData.start_bureau" placeholder="请输入起始站段"></el-input>
+      <el-form-item label="始发局" prop="origin_bureau">
+        <el-input v-model="formData.origin_bureau" placeholder="请输入始发局"></el-input>
       </el-form-item>
       
-      <el-form-item label="目的站段" prop="end_bureau">
-        <el-input v-model="formData.end_bureau" placeholder="请输入目的站段"></el-input>
+      <el-form-item label="邮路名称" prop="mail_route_name">
+        <el-input v-model="formData.mail_route_name" placeholder="请输入邮路名称"></el-input>
       </el-form-item>
       
-      <el-form-item label="路线名称" prop="route_name">
-        <el-input v-model="formData.route_name" placeholder="请输入路线名称"></el-input>
+      <el-form-item label="组开单位" prop="organizing_unit">
+        <el-input v-model="formData.organizing_unit" placeholder="请输入组开单位"></el-input>
       </el-form-item>
       
       <el-form-item label="运输类型" prop="transport_type">
         <el-select v-model="formData.transport_type" placeholder="请选择运输类型">
-          <el-option label="普通货物" value="regular"></el-option>
-          <el-option label="危险品" value="dangerous"></el-option>
-          <el-option label="特殊物资" value="special"></el-option>
-          <el-option label="紧急物资" value="urgent"></el-option>
+          <el-option label="单程" value="单程"></el-option>
+          <el-option label="往返" value="往返"></el-option>
         </el-select>
       </el-form-item>
       
-      <el-form-item label="预计里程(km)" prop="estimated_distance">
+      <el-form-item label="需求类型" prop="requirement_type">
+        <el-select v-model="formData.requirement_type" placeholder="请选择需求类型">
+          <el-option label="正班" value="正班"></el-option>
+          <el-option label="加班" value="加班"></el-option>
+        </el-select>
+      </el-form-item>
+      
+      <el-form-item label="标准吨位" prop="standard_weight">
+        <el-select v-model="formData.standard_weight" placeholder="请选择标准吨位" @change="handleWeightChange">
+          <el-option label="5吨 (≥35m³)" value="5吨"></el-option>
+          <el-option label="8吨 (≥45m³)" value="8吨"></el-option>
+          <el-option label="12吨 (≥55m³)" value="12吨"></el-option>
+          <el-option label="20吨 (≥100m³)" value="20吨"></el-option>
+          <el-option label="30吨 (≥130m³)" value="30吨"></el-option>
+          <el-option label="40吨A (≥150m³)" value="40吨A"></el-option>
+          <el-option label="40吨B (≥180m³)" value="40吨B"></el-option>
+        </el-select>
+      </el-form-item>
+      
+      <el-form-item label="标准容积(m³)" prop="standard_volume">
         <el-input-number 
-          v-model="formData.estimated_distance" 
+          v-model="formData.standard_volume" 
           :min="0" 
-          :precision="2"
-          :step="10"
+          :precision="0"
           controls-position="right"
         ></el-input-number>
       </el-form-item>
       
-      <el-form-item label="预计时长(小时)" prop="estimated_duration">
+      <el-form-item label="实际需求容积(m³)" prop="actual_volume">
         <el-input-number 
-          v-model="formData.estimated_duration" 
+          v-model="formData.actual_volume" 
           :min="0" 
-          :precision="1"
-          :step="0.5"
+          :precision="0"
           controls-position="right"
+          :disabled="actualVolumeDisabled"
+          style="width: 100%"
         ></el-input-number>
+        <div v-if="actualVolumeDisabled" style="font-size: 12px; color: #909399; margin-top: 5px;">
+          实际容积由车间地调在发车环节确认时填写
+        </div>
       </el-form-item>
       
-      <el-form-item label="联系人" prop="contact_person">
-        <el-input v-model="formData.contact_person" placeholder="请输入联系人姓名"></el-input>
-      </el-form-item>
-      
-      <el-form-item label="联系电话" prop="contact_phone">
-        <el-input v-model="formData.contact_phone" placeholder="请输入联系电话"></el-input>
-      </el-form-item>
-      
-      <el-form-item label="备注" prop="remarks">
+      <el-form-item label="特殊要求" prop="special_requirements">
         <el-input 
-          v-model="formData.remarks" 
+          v-model="formData.special_requirements" 
           type="textarea" 
           rows="3"
-          placeholder="请输入备注信息"
+          placeholder="请输入特殊要求"
         ></el-input>
       </el-form-item>
+      
+      <el-form-item label="发起人部门" prop="initiator_department">
+        <el-input v-model="formData.initiator_department" placeholder="请输入发起人部门"></el-input>
+      </el-form-item>
+      
+      
       
       <el-form-item>
         <el-button type="primary" @click="submitForm">提交</el-button>
@@ -84,28 +102,116 @@
 </template>
 
 <script>
-import { ref, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
-import { dispatchService } from '@/services/dispatchService'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { usePermissionStore } from '@/stores/permission'
+import dayjs from 'dayjs'
 
 export default {
   name: 'TaskForm',
+  props: {
+    task: {
+      type: Object,
+      default: () => ({})
+    }
+  },
   emits: ['submit', 'cancel'],
   setup(props, { emit }) {
     const formRef = ref(null)
+    const permissionStore = usePermissionStore()
+    
+    // 获取当前用户角色
+    const currentUserRole = computed(() => {
+      if (permissionStore.roles && permissionStore.roles.length > 0) {
+        return permissionStore.roles[0] // 返回第一个角色
+      }
+      return '' // 默认无角色
+    })
+    
+    // 实际容积字段是否禁用（仅车间地调角色可编辑）
+    const actualVolumeDisabled = computed(() => {
+      const role = currentUserRole.value
+      return role !== '车间地调'
+    })
+    
+    // 吨位-容积映射表（标准吨位≥标准容积）
+     const weightVolumeMap = {
+       '5吨': 35,    // 5吨 ≥ 35m³
+       '8吨': 45,    // 8吨 ≥ 45m³
+       '12吨': 55,   // 12吨 ≥ 55m³
+       '20吨': 100,  // 20吨 ≥ 100m³
+       '30吨': 130,  // 30吨 ≥ 130m³
+       '40吨A': 150, // 40吨A ≥ 150m³
+       '40吨B': 180  // 40吨B ≥ 180m³
+     }
+
+    // 归一化需求日期到 Date 或 null
+    const normalizeRequiredDate = (val) => {
+      if (val === undefined || val === null) return null
+      if (typeof val === 'string') {
+        const v = val.trim()
+        if (v === '' || v.toLowerCase() === 'invalid date' || v.toLowerCase() === 'nan') return null
+        // YYYY-MM-DD HH:mm:ss
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(v)) return new Date(v.replace(' ', 'T'))
+        // YYYY-MM-DD HH:mm
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(v)) return new Date(v.replace(' ', 'T') + ':00')
+        // YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(v)
+        const d = new Date(v)
+        return isNaN(d.getTime()) ? null : d
+      }
+      if (val instanceof Date) {
+        return isNaN(val.getTime()) ? null : val
+      }
+      return null
+    }
     
     // 表单数据
     const formData = reactive({
-      required_date: '',
-      start_bureau: '',
-      end_bureau: '',
-      route_name: '',
-      transport_type: '',
-      estimated_distance: 0,
-      estimated_duration: 0,
-      contact_person: '',
-      contact_phone: '',
-      remarks: ''
+      required_date: normalizeRequiredDate(props.task?.required_date),
+      origin_bureau: props.task?.origin_bureau || '',
+      mail_route_name: props.task?.mail_route_name || '',
+      organizing_unit: props.task?.organizing_unit || '',
+      transport_type: props.task?.transport_type || '',
+      requirement_type: props.task?.requirement_type || '',
+      standard_weight: props.task?.standard_weight || '',
+      standard_volume: props.task?.standard_volume || 0,
+      actual_volume: props.task?.actual_volume || 0,
+      special_requirements: props.task?.special_requirements || '',
+      initiator_department: props.task?.initiator_department || '',
+      audit_required: props.task?.audit_required !== undefined ? props.task.audit_required : false
+    })
+
+    // 吨位选择变化处理
+     const handleWeightChange = (value) => {
+       if (value && weightVolumeMap[value]) {
+         formData.standard_volume = weightVolumeMap[value]
+         // 如果实际容积小于标准容积，自动更新实际容积
+         if (formData.actual_volume < weightVolumeMap[value]) {
+           formData.actual_volume = weightVolumeMap[value]
+         }
+       } else {
+         formData.standard_volume = 0
+       }
+     }
+     
+     // 监听标准吨位变化，自动设置标准容积
+     watch(() => formData.standard_weight, (newWeight) => {
+       handleWeightChange(newWeight)
+     })
+
+    // 根据角色自动设置审核需求
+    const setAuditRequiredByRole = () => {
+      const role = currentUserRole.value
+      if (role === '车间地调') {
+        formData.audit_required = true // 车间地调需要审核
+      } else if (role === '区域调度员') {
+        formData.audit_required = false // 区域调度员不需要审核
+      }
+    }
+
+    // 组件挂载时设置审核需求
+    onMounted(() => {
+      setAuditRequiredByRole()
     })
     
     // 表单验证规则
@@ -113,24 +219,29 @@ export default {
       required_date: [
         { required: true, message: '请选择需求日期', trigger: 'change' }
       ],
-      start_bureau: [
-        { required: true, message: '请输入起始站段', trigger: 'blur' }
+      origin_bureau: [
+        { required: true, message: '请输入始发局', trigger: 'blur' }
       ],
-      end_bureau: [
-        { required: true, message: '请输入目的站段', trigger: 'blur' }
+      mail_route_name: [
+        { required: true, message: '请输入邮路名称', trigger: 'blur' }
       ],
-      route_name: [
-        { required: true, message: '请输入路线名称', trigger: 'blur' }
+      organizing_unit: [
+        { required: true, message: '请输入组开单位', trigger: 'blur' }
       ],
       transport_type: [
         { required: true, message: '请选择运输类型', trigger: 'change' }
       ],
-      contact_person: [
-        { required: true, message: '请输入联系人姓名', trigger: 'blur' }
+      requirement_type: [
+        { required: true, message: '请选择需求类型', trigger: 'change' }
       ],
-      contact_phone: [
-        { required: true, message: '请输入联系电话', trigger: 'blur' },
-        { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' }
+      standard_weight: [
+        { required: true, message: '请选择标准吨位', trigger: 'change' }
+      ],
+      standard_volume: [
+        { required: true, message: '标准容积自动计算', trigger: 'change' }
+      ],
+      actual_volume: [
+        { required: true, message: '请输入实际需求容积', trigger: 'blur' }
       ]
     }
     
@@ -140,15 +251,34 @@ export default {
       
       await formRef.value.validate(async (valid, fields) => {
         if (valid) {
-          try {
-            // 使用dispatchService创建任务
-            const result = await dispatchService.createTask(formData)
-            ElMessage.success('创建任务成功')
-            emit('submit', result)
-          } catch (error) {
-            console.error('创建任务失败:', error)
-            ElMessage.error(error.message || '创建任务失败')
+          // 格式化日期时间为 'YYYY-MM-DD HH:mm:ss'
+          const formatDateTime = (val) => {
+            if (!val) return ''
+            if (typeof val === 'string') {
+              return val
+            }
+            const d = new Date(val)
+            const pad = (n) => String(n).padStart(2, '0')
+            const y = d.getFullYear()
+            const m = pad(d.getMonth() + 1)
+            const day = pad(d.getDate())
+            const h = pad(d.getHours())
+            const mi = pad(d.getMinutes())
+            const s = pad(d.getSeconds())
+            return `${y}-${m}-${day} ${h}:${mi}:${s}`
           }
+
+          // 整理表单数据，由父组件提交并处理消息
+          const taskData = {
+            ...formData,
+            required_date: formatDateTime(formData.required_date),
+            status: '待审核',
+            dispatch_track: '轨道B',
+            initiator_role: '车间地调',
+            initiator_user_id: 1,
+            current_handler_role: '审核员'
+          }
+          emit('submit', taskData)
         } else {
           console.log('表单验证失败', fields)
         }
@@ -161,12 +291,14 @@ export default {
     }
     
     return {
-      formRef,
-      formData,
-      rules,
-      submitForm,
-      cancel
-    }
+       formRef,
+       formData,
+       rules,
+       submitForm,
+       cancel,
+       actualVolumeDisabled,
+       handleWeightChange
+     }
   }
 }
 </script>

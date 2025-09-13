@@ -5,15 +5,15 @@
         <el-input v-model="assignForm.task_id" disabled></el-input>
       </el-form-item>
       
-      <el-form-item label="需求容积">
-        <el-input v-model="taskInfo.volume" disabled>
-          <template #append>m³</template>
+      <el-form-item label="标准吨位">
+        <el-input v-model="taskInfo.standard_weight" disabled>
+          <template #append>吨</template>
         </el-input>
       </el-form-item>
       
-      <el-form-item label="需求重量">
-        <el-input v-model="taskInfo.weight" disabled>
-          <template #append>吨</template>
+      <el-form-item label="实际需求容积">
+        <el-input v-model="taskInfo.actual_volume" disabled>
+          <template #append>m³</template>
         </el-input>
       </el-form-item>
       
@@ -243,13 +243,13 @@ export default {
             const totalCapacity = assignForm.selectedVehicles.reduce((sum, vehicle) => sum + vehicle.capacity, 0)
             const totalVolume = assignForm.selectedVehicles.reduce((sum, vehicle) => sum + vehicle.volume, 0)
             
-            if (totalCapacity < props.taskInfo.weight) {
-              ElMessage.warning(`选择的车辆总载重量(${totalCapacity}吨)小于任务需求(${props.taskInfo.weight}吨)`)
+            if (totalCapacity < props.taskInfo.standard_weight) {
+              ElMessage.warning(`选择的车辆总载重量(${totalCapacity}吨)小于任务需求(${props.taskInfo.standard_weight}吨)`)
               return
             }
             
-            if (totalVolume < props.taskInfo.volume) {
-              ElMessage.warning(`选择的车辆总容积(${totalVolume}m³)小于任务需求(${props.taskInfo.volume}m³)`)
+            if (totalVolume < props.taskInfo.actual_volume) {
+              ElMessage.warning(`选择的车辆总容积(${totalVolume}m³)小于任务需求(${props.taskInfo.actual_volume}m³)`)
               return
             }
             

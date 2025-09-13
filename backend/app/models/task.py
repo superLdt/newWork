@@ -11,14 +11,14 @@ class ManualDispatchTask(db.Model):
     
     task_id = db.Column(db.String(50), primary_key=True, comment='任务唯一ID')
     required_date = db.Column(db.String(20), comment='需求日期')
-    start_bureau = db.Column(db.String(100), comment='起始站段')
-    route_direction = db.Column(db.String(50), comment='路线方向')
-    carrier_company = db.Column(db.String(100), comment='运输公司')
-    route_name = db.Column(db.String(100), comment='路线名称')
+    origin_bureau = db.Column(db.String(100), comment='始发局')
+    mail_route_name = db.Column(db.String(100), comment='邮路名称')
+    organizing_unit = db.Column(db.String(100), comment='组开单位（承运商）')
     transport_type = db.Column(db.String(50), comment='运输类型')
     requirement_type = db.Column(db.String(50), comment='需求类型')
-    volume = db.Column(db.Integer, comment='需求容积')
-    weight = db.Column(db.Float, comment='需求重量')
+    standard_weight = db.Column(db.String(20), comment='标准吨位')
+    standard_volume = db.Column(db.Integer, comment='标准容积')
+    actual_volume = db.Column(db.Integer, comment='实际需求容积')
     special_requirements = db.Column(db.Text, comment='特殊要求')
     status = db.Column(db.String(20), default='待审核', comment='任务状态')
     dispatch_track = db.Column(db.String(10), comment='派车轨道')
@@ -42,7 +42,7 @@ class ManualDispatchTask(db.Model):
     status_history = db.relationship('DispatchStatusHistory', backref='task', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
-        return f'<ManualDispatchTask {self.task_id}: {self.route_name}>'
+        return f'<ManualDispatchTask {self.task_id}: {self.mail_route_name}>'
     
     def to_dict(self):
         """
@@ -53,14 +53,14 @@ class ManualDispatchTask(db.Model):
         return {
             'task_id': self.task_id,
             'required_date': self.required_date,
-            'start_bureau': self.start_bureau,
-            'route_direction': self.route_direction,
-            'carrier_company': self.carrier_company,
-            'route_name': self.route_name,
+            'origin_bureau': self.origin_bureau,
+            'mail_route_name': self.mail_route_name,
+            'organizing_unit': self.organizing_unit,
             'transport_type': self.transport_type,
             'requirement_type': self.requirement_type,
-            'volume': self.volume,
-            'weight': self.weight,
+            'standard_weight': self.standard_weight,
+            'standard_volume': self.standard_volume,
+            'actual_volume': self.actual_volume,
             'special_requirements': self.special_requirements,
             'status': self.status,
             'dispatch_track': self.dispatch_track,
@@ -102,3 +102,47 @@ class ManualDispatchTask(db.Model):
             list: 轨道选项列表
         """
         return ['轨道A', '轨道B']
+    
+    @classmethod
+    def get_weight_volume_mapping(cls):
+        """
+        获取吨位与标准容积的映射关系
+        Returns:
+            dict: 吨位-标准容积映射字典
+        """
+        return {
+            '5吨': 35,
+            '8吨': 45,
+            '12吨': 55,
+            '20吨': 100,
+            '30吨': 130,
+            '40吨A': 150,
+            '40吨B': 180
+        }
+    
+    @classmethod
+    def get_standard_weight_options(cls):
+        """
+        获取标准吨位选项列表
+        Returns:
+            list: 标准吨位选项列表
+        """
+        return ['5吨', '8吨', '12吨', '20吨', '30吨', '40吨A', '40吨B']
+    
+    @classmethod
+    def get_transport_type_options(cls):
+        """
+        获取运输类型选项列表
+        Returns:
+            list: 运输类型选项列表
+        """
+        return ['单程', '往返']
+    
+    @classmethod
+    def get_requirement_type_options(cls):
+        """
+        获取需求类型选项列表
+        Returns:
+            list: 需求类型选项列表
+        """
+        return ['正班', '加班']

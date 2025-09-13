@@ -77,6 +77,16 @@ const routes = [
         }
       },
       {
+        path: '/dispatch/dashboard',
+        name: 'DispatchDashboard',
+        component: () => import('../pages/dispatch/DispatchDashboard.vue'),
+        meta: {
+          title: '调度仪表盘',
+          menuCode: 'dispatch_dashboard',
+          permissions: ['dispatch:read']
+        }
+      },
+      {
         path: '/dispatch/tracking',
         name: 'TransportTracking',
         component: ComingSoon,

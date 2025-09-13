@@ -6,14 +6,13 @@
           v-model="taskForm.required_date"
           type="date"
           placeholder="选择日期"
-          format="YYYY-MM-DD"
-          value-format="YYYY-MM-DD"
+          format="yyyy-MM-DD"
           style="width: 100%"
         ></el-date-picker>
       </el-form-item>
       
-      <el-form-item label="起始站段" prop="start_bureau">
-        <el-select v-model="taskForm.start_bureau" placeholder="请选择起始站段" style="width: 100%">
+      <el-form-item label="始发局" prop="origin_bureau">
+        <el-select v-model="taskForm.origin_bureau" placeholder="请选择始发局" style="width: 100%">
           <el-option
             v-for="item in bureauOptions"
             :key="item.value"
@@ -23,32 +22,18 @@
         </el-select>
       </el-form-item>
       
-      <el-form-item label="路线方向" prop="route_direction">
-        <el-select v-model="taskForm.route_direction" placeholder="请选择路线方向" style="width: 100%">
-          <el-option
-            v-for="item in directionOptions"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          ></el-option>
-        </el-select>
+      <el-form-item label="邮路名称" prop="mail_route_name">
+        <el-input
+          v-model="taskForm.mail_route_name"
+          placeholder="请输入邮路名称"
+          style="width: 100%"
+        ></el-input>
       </el-form-item>
       
-      <el-form-item label="运输公司" prop="carrier_company">
-        <el-select v-model="taskForm.carrier_company" placeholder="请选择运输公司" style="width: 100%">
+      <el-form-item label="组开单位（承运商）" prop="organizing_unit">
+        <el-select v-model="taskForm.organizing_unit" placeholder="请选择组开单位" style="width: 100%">
           <el-option
             v-for="item in companyOptions"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          ></el-option>
-        </el-select>
-      </el-form-item>
-      
-      <el-form-item label="路线名称" prop="route_name">
-        <el-select v-model="taskForm.route_name" placeholder="请选择路线名称" style="width: 100%">
-          <el-option
-            v-for="item in routeOptions"
             :key="item.value"
             :label="item.label"
             :value="item.value"
@@ -78,16 +63,37 @@
         </el-select>
       </el-form-item>
       
-      <el-form-item label="需求容积" prop="volume">
-        <el-input-number v-model="taskForm.volume" :min="0" :precision="2" :step="1" style="width: 100%">
-          <template #append>m³</template>
-        </el-input-number>
+      <el-form-item label="标准吨位" prop="standard_weight">
+        <el-select v-model="taskForm.standard_weight" placeholder="请选择标准吨位" style="width: 100%" @change="handleWeightChange">
+          <el-option
+            v-for="item in weightOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          ></el-option>
+        </el-select>
       </el-form-item>
       
-      <el-form-item label="需求重量" prop="weight">
-        <el-input-number v-model="taskForm.weight" :min="0" :precision="2" :step="1" style="width: 100%">
-          <template #append>吨</template>
+      <el-form-item label="标准容积" prop="standard_volume">
+        <el-input v-model="taskForm.standard_volume" disabled placeholder="自动计算" style="width: 100%">
+          <template #append>m³</template>
+        </el-input>
+      </el-form-item>
+      
+      <el-form-item label="实际需求容积" prop="actual_volume">
+        <el-input-number 
+          v-model="taskForm.actual_volume" 
+          :min="0" 
+          :precision="0" 
+          :step="1" 
+          :disabled="actualVolumeDisabled"
+          style="width: 100%"
+        >
+          <template #append>m³</template>
         </el-input-number>
+        <div v-if="actualVolumeDisabled" style="font-size: 12px; color: #909399; margin-top: 5px;">
+          实际容积由车间地调在发车环节确认时填写
+        </div>
       </el-form-item>
       
       <el-form-item label="派车轨道" prop="dispatch_track">
@@ -109,6 +115,15 @@
           placeholder="请输入特殊要求或备注信息"
         ></el-input>
       </el-form-item>
+
+      <el-form-item v-if="showAuditField" label="是否需要审核" prop="audit_required">
+        <el-switch
+          v-model="taskForm.audit_required"
+          :disabled="true"
+          active-text="需要审核"
+          inactive-text="无需审核"
+        ></el-switch>
+      </el-form-item>
       
       <el-form-item>
         <el-button type="primary" @click="submitForm">提交</el-button>
@@ -120,28 +135,52 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { usePermissionStore } from '@/stores/permission'
+import dayjs from 'dayjs'
 
 export default {
   name: 'CreateTask',
   emits: ['create-success', 'cancel'],
   setup(props, { emit }) {
     const taskFormRef = ref(null)
+    const permissionStore = usePermissionStore()
+    
+    // 获取当前用户角色
+    const currentUserRole = computed(() => {
+      if (permissionStore.roles && permissionStore.roles.length > 0) {
+        return permissionStore.roles[0] // 返回第一个角色
+      }
+      return '' // 默认无角色
+    })
+    
+    // 是否显示审核字段（区域调度员、超级管理员、车间地调显示，其他角色隐藏）
+    const showAuditField = computed(() => {
+      const role = currentUserRole.value
+      return role === '区域调度员' || role === '超级管理员' || role === '车间地调'
+    })
+    
+    // 实际容积字段是否禁用（仅车间地调角色可编辑）
+    const actualVolumeDisabled = computed(() => {
+      const role = currentUserRole.value
+      return role !== '车间地调'
+    })
     
     // 表单数据
     const taskForm = reactive({
-      required_date: '',
-      start_bureau: '',
-      route_direction: '',
-      carrier_company: '',
-      route_name: '',
+      required_date: new Date(), // 使用 Date 类型，避免字符串解析问题
+      origin_bureau: '',
+      mail_route_name: '',
+      organizing_unit: '',
       transport_type: '',
       requirement_type: '',
-      volume: 0,
-      weight: 0,
+      standard_weight: '',
+      standard_volume: 0,
+      actual_volume: 0,
       dispatch_track: '',
-      special_requirements: ''
+      special_requirements: '',
+      audit_required: false // 是否需要审核
     })
     
     // 表单验证规则
@@ -149,17 +188,15 @@ export default {
       required_date: [
         { required: true, message: '请选择需求日期', trigger: 'change' }
       ],
-      start_bureau: [
-        { required: true, message: '请选择起始站段', trigger: 'change' }
+      origin_bureau: [
+        { required: true, message: '请选择始发局', trigger: 'change' }
       ],
-      route_direction: [
-        { required: true, message: '请选择路线方向', trigger: 'change' }
+      mail_route_name: [
+        { required: true, message: '请输入邮路名称', trigger: 'blur' },
+        { min: 1, max: 100, message: '邮路名称长度1-100字符', trigger: 'blur' }
       ],
-      carrier_company: [
-        { required: true, message: '请选择运输公司', trigger: 'change' }
-      ],
-      route_name: [
-        { required: true, message: '请选择路线名称', trigger: 'change' }
+      organizing_unit: [
+        { required: true, message: '请选择组开单位', trigger: 'change' }
       ],
       transport_type: [
         { required: true, message: '请选择运输类型', trigger: 'change' }
@@ -167,23 +204,43 @@ export default {
       requirement_type: [
         { required: true, message: '请选择需求类型', trigger: 'change' }
       ],
-      volume: [
-        { required: true, message: '请输入需求容积', trigger: 'blur' },
-        { type: 'number', min: 0.01, message: '容积必须大于0', trigger: 'blur' }
+      standard_weight: [
+        { required: true, message: '请选择标准吨位', trigger: 'change' }
       ],
-      weight: [
-        { required: true, message: '请输入需求重量', trigger: 'blur' },
-        { type: 'number', min: 0.01, message: '重量必须大于0', trigger: 'blur' }
+      standard_volume: [
+        { required: true, message: '标准容积自动计算', trigger: 'change' }
+      ],
+      actual_volume: [
+        { 
+          required: true, 
+          message: '请输入实际需求容积', 
+          trigger: 'blur',
+          validator: (rule, value, callback) => {
+            if (actualVolumeDisabled.value) {
+              // 如果字段被禁用，跳过验证
+              callback()
+            } else if (value === null || value === undefined || value === '') {
+              callback(new Error('请输入实际需求容积'))
+            } else if (value < 0) {
+              callback(new Error('容积不能为负数'))
+            } else {
+              callback()
+            }
+          }
+        }
       ],
       dispatch_track: [
         { required: true, message: '请选择派车轨道', trigger: 'change' }
       ],
       special_requirements: [
         { max: 200, message: '特殊要求不能超过200个字符', trigger: 'blur' }
+      ],
+      audit_required: [
+        { required: false, message: '审核需求自动设置', trigger: 'change' }
       ]
     }
     
-    // 站段选项
+    // 始发局选项
     const bureauOptions = [
       { value: '北京', label: '北京' },
       { value: '上海', label: '上海' },
@@ -192,21 +249,17 @@ export default {
       { value: '成都', label: '成都' }
     ]
     
-    // 路线方向选项
-    const directionOptions = [
-      { value: '南向北', label: '南向北' },
-      { value: '北向南', label: '北向南' },
-      { value: '东向西', label: '东向西' },
-      { value: '西向东', label: '西向东' }
-    ]
-    
-    // 运输公司选项
+    // 组开单位选项
     const companyOptions = [
-      { value: '中铁物流', label: '中铁物流' },
-      { value: '中远海运', label: '中远海运' },
-      { value: '顺丰物流', label: '顺丰物流' },
+      { value: '中国邮政', label: '中国邮政' },
+      { value: '中铁快运', label: '中铁快运' },
+      { value: '顺丰速运', label: '顺丰速运' },
+      { value: '中通快递', label: '中通快递' },
+      { value: '圆通速递', label: '圆通速递' },
+      { value: '申通快递', label: '申通快递' },
+      { value: '韵达快递', label: '韵达快递' },
       { value: '京东物流', label: '京东物流' },
-      { value: '德邦物流', label: '德邦物流' }
+      { value: '德邦快递', label: '德邦快递' }
     ]
     
     // 路线名称选项
@@ -220,20 +273,37 @@ export default {
     
     // 运输类型选项
     const transportTypeOptions = [
-      { value: '普通货运', label: '普通货运' },
-      { value: '快速货运', label: '快速货运' },
-      { value: '冷链运输', label: '冷链运输' },
-      { value: '危险品运输', label: '危险品运输' },
-      { value: '大件运输', label: '大件运输' }
+      { value: '单程', label: '单程' },
+      { value: '往返', label: '往返' }
     ]
     
     // 需求类型选项
     const requirementTypeOptions = [
-      { value: '常规', label: '常规' },
-      { value: '紧急', label: '紧急' },
-      { value: '特殊', label: '特殊' },
-      { value: '临时', label: '临时' }
+      { value: '正班', label: '正班' },
+      { value: '加班', label: '加班' }
     ]
+    
+    // 标准吨位选项
+    const weightOptions = [
+      { value: '5吨', label: '5吨 (≥35m³)' },
+      { value: '8吨', label: '8吨 (≥45m³)' },
+      { value: '12吨', label: '12吨 (≥55m³)' },
+      { value: '20吨', label: '20吨 (≥100m³)' },
+      { value: '30吨', label: '30吨 (≥130m³)' },
+      { value: '40吨A', label: '40吨A (≥150m³)' },
+      { value: '40吨B', label: '40吨B (≥180m³)' }
+    ]
+    
+    // 吨位-容积映射（标准吨位≥标准容积）
+    const weightVolumeMapping = {
+      '5吨': 35,    // 5吨 ≥ 35m³
+      '8吨': 45,    // 8吨 ≥ 45m³
+      '12吨': 55,   // 12吨 ≥ 55m³
+      '20吨': 100,  // 20吨 ≥ 100m³
+      '30吨': 130,  // 30吨 ≥ 130m³
+      '40吨A': 150, // 40吨A ≥ 150m³
+      '40吨B': 180  // 40吨B ≥ 180m³
+    }
     
     // 派车轨道选项
     const trackOptions = [
@@ -244,6 +314,19 @@ export default {
       { value: '5号轨道', label: '5号轨道' }
     ]
     
+    // 吨位选择变化处理
+    const handleWeightChange = (value) => {
+      if (value && weightVolumeMapping[value]) {
+        taskForm.standard_volume = weightVolumeMapping[value]
+        // 如果实际容积小于标准容积，自动更新实际容积
+        if (taskForm.actual_volume < weightVolumeMapping[value]) {
+          taskForm.actual_volume = weightVolumeMapping[value]
+        }
+      } else {
+        taskForm.standard_volume = 0
+      }
+    }
+    
     // 提交表单
     const submitForm = async () => {
       if (!taskFormRef.value) return
@@ -251,24 +334,10 @@ export default {
       await taskFormRef.value.validate(async (valid) => {
         if (valid) {
           try {
-            // 模拟API调用，实际项目中应替换为真实API
-            // const response = await fetch('/api/dispatch/tasks', {
-            //   method: 'POST',
-            //   headers: {
-            //     'Content-Type': 'application/json'
-            //   },
-            //   body: JSON.stringify(taskForm)
-            // })
-            // 
-            // if (!response.ok) {
-            //   throw new Error('创建派车任务失败')
-            // }
-            // 
-            // const data = await response.json()
-            
             ElMessage.success('派车任务创建成功')
             emit('create-success', {
               ...taskForm,
+              required_date: taskForm.required_date ? dayjs(taskForm.required_date).format('yyyy-MM-DD') : '',
               task_id: 'TASK' + Date.now().toString().slice(-6) // 模拟生成任务ID
             })
           } catch (error) {
@@ -285,6 +354,8 @@ export default {
     const resetForm = () => {
       if (taskFormRef.value) {
         taskFormRef.value.resetFields()
+        // 复位日期为当前日期，确保控件显示正常
+        taskForm.required_date = new Date()
       }
     }
     
@@ -293,8 +364,25 @@ export default {
       emit('cancel')
     }
     
+    // 根据用户角色自动设置审核需求
+    const setAuditRequiredByRole = () => {
+      const role = currentUserRole.value
+      
+      if (role === '区域调度员' || role === '超级管理员') {
+        // 区域调度员和超级管理员不需要审核
+        taskForm.audit_required = false
+      } else if (role === '车间地调') {
+        // 车间地调需要审核
+        taskForm.audit_required = true
+      } else {
+        // 其他角色默认需要审核
+        taskForm.audit_required = true
+      }
+    }
+    
     onMounted(() => {
-      // 可以在这里加载初始数据
+      // 根据角色设置审核需求
+      setAuditRequiredByRole()
     })
     
     return {
@@ -302,12 +390,16 @@ export default {
       taskForm,
       rules,
       bureauOptions,
-      directionOptions,
       companyOptions,
       routeOptions,
       transportTypeOptions,
       requirementTypeOptions,
+      weightOptions,
       trackOptions,
+      handleWeightChange,
+      currentUserRole,
+      showAuditField,
+      actualVolumeDisabled,
       submitForm,
       resetForm,
       cancel

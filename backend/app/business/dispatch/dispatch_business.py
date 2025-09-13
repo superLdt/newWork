@@ -34,7 +34,7 @@ class DispatchBusiness:
     # == 新增：创建/更新/审核/分配/完成 校验方法 ==
     @staticmethod
     def validate_task_creation(data: Dict[str, Any]) -> Dict[str, Any]:
-        required_fields = ['title', 'description', 'start_time', 'end_time', 'vehicle_type', 'passenger_count']
+        required_fields = ['required_date', 'origin_bureau', 'mail_route_name', 'transport_type', 'requirement_type', 'standard_weight', 'standard_volume', 'actual_volume']
         for f in required_fields:
             if f not in data or data.get(f) in (None, ''):
                 return DispatchBusiness._bad(f"缺少必填字段: {f}")
@@ -42,7 +42,7 @@ class DispatchBusiness:
 
     @staticmethod
     def validate_task_update(task_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        allowed_fields = {'title','description','start_time','end_time','vehicle_type','passenger_count','location','contact_person','contact_phone'}
+        allowed_fields = {'required_date', 'origin_bureau', 'mail_route_name', 'organizing_unit', 'transport_type', 'requirement_type', 'standard_weight', 'standard_volume', 'actual_volume', 'special_requirements', 'initiator_department', 'audit_required'}
         if not any(k in data for k in allowed_fields):
             return DispatchBusiness._bad("未提供可更新的字段")
         return DispatchBusiness._ok()

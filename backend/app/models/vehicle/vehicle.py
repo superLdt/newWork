@@ -11,7 +11,7 @@ class Vehicle(db.Model):
     
     id = db.Column(db.Integer, primary_key=True, comment='车辆唯一ID')
     task_id = db.Column(db.String(50), db.ForeignKey('manual_dispatch_tasks.task_id'), comment='关联任务ID')
-    manifest_number = db.Column(db.String(50), comment='货票号')
+    manifest_number = db.Column(db.String(50), comment='路单流水号')
     dispatch_number = db.Column(db.String(50), comment='派车单号')
     license_plate = db.Column(db.String(20), comment='车牌号')
     carriage_number = db.Column(db.String(50), comment='车厢号')

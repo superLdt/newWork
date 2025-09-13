@@ -20,6 +20,14 @@
           class="filter-input"
         />
         
+        <!-- 批量操作按钮 -->
+        <div class="batch-operations">
+          <el-button size="small" @click="selectAll">全选</el-button>
+          <el-button size="small" @click="unselectAll">全不选</el-button>
+          <el-button size="small" @click="expandAll">展开全部</el-button>
+          <el-button size="small" @click="collapseAll">收起全部</el-button>
+        </div>
+        
         <el-tree
           ref="menuTree"
           :data="menuTree"
@@ -29,6 +37,10 @@
           :filter-node-method="filterNode"
           :default-checked-keys="selectedMenus"
           class="menu-tree"
+          check-strictly="false"
+          check-on-click-node
+          :default-expand-all="true"
+          empty-text="暂无菜单数据"
         >
           <template #default="{ node, data }">
             <span class="custom-tree-node">
@@ -100,17 +112,42 @@ export default {
       this.loading = true
       try {
         // 获取所有菜单
-        const allMenusResponse = await apiService.menus.getMenus()
+        const allMenusResponse = await apiService.menus.getMenus({ tree: false })
         if (allMenusResponse.code === 200) {
           this.menus = allMenusResponse.data
         } else {
           ElMessage.error('获取菜单列表失败')
         }
         
-        // 获取角色已有菜单权限
+        // 获取角色已有菜单权限（现在返回完整菜单树，包含权限标记）
         const roleMenusResponse = await apiService.roles.getRoleMenus(this.role.id)
         if (roleMenusResponse.code === 200) {
-          this.selectedMenus = roleMenusResponse.data.map(m => m.id)
+          // 从返回的菜单树中提取有权限的菜单ID
+          const extractPermissionIds = (nodes) => {
+            if (!Array.isArray(nodes)) return []
+            const ids = []
+            const dfs = (arr) => {
+              arr.forEach(n => {
+                if (n.has_permission) {
+                  ids.push(n.id)
+                }
+                if (n.children && n.children.length > 0) {
+                  dfs(n.children)
+                }
+              })
+            }
+            dfs(nodes)
+            return ids
+          }
+          
+          this.selectedMenus = extractPermissionIds(roleMenusResponse.data)
+          
+          // 设置默认选中状态
+          this.$nextTick(() => {
+            if (this.$refs.menuTree) {
+              this.$refs.menuTree.setCheckedKeys(this.selectedMenus)
+            }
+          })
         } else {
           ElMessage.error('获取角色菜单权限失败')
         }
@@ -137,14 +174,63 @@ export default {
         return node
       })
     },
+    // 批量操作方法
+    selectAll() {
+      if (this.$refs.menuTree) {
+        const allMenuIds = this.getAllMenuIds(this.menuTree)
+        this.$refs.menuTree.setCheckedKeys(allMenuIds)
+        ElMessage.success('已全选所有菜单')
+      }
+    },
+    unselectAll() {
+      if (this.$refs.menuTree) {
+        this.$refs.menuTree.setCheckedKeys([])
+        ElMessage.success('已取消选择所有菜单')
+      }
+    },
+    expandAll() {
+      if (this.$refs.menuTree) {
+        const allMenuIds = this.getAllMenuIds(this.menuTree)
+        allMenuIds.forEach(id => {
+          this.$refs.menuTree.store.nodesMap[id].expanded = true
+        })
+        ElMessage.success('已展开所有菜单')
+      }
+    },
+    collapseAll() {
+      if (this.$refs.menuTree) {
+        const allMenuIds = this.getAllMenuIds(this.menuTree)
+        allMenuIds.forEach(id => {
+          this.$refs.menuTree.store.nodesMap[id].expanded = false
+        })
+        ElMessage.success('已收起所有菜单')
+      }
+    },
+    // 递归获取所有菜单ID
+    getAllMenuIds(menus) {
+      let ids = []
+      menus.forEach(menu => {
+        ids.push(menu.id)
+        if (menu.children && menu.children.length > 0) {
+          ids = ids.concat(this.getAllMenuIds(menu.children))
+        }
+      })
+      return ids
+    },
     async saveMenuPermissions() {
       this.loading = true
       try {
+        // 获取所有选中的节点（包括父节点和子节点）
         const selectedMenuIds = this.$refs.menuTree.getCheckedKeys()
+        // 获取半选中的节点（父节点下的子节点部分选中）
+        const halfCheckedKeys = this.$refs.menuTree.getHalfCheckedKeys()
+        
+        // 合并所有需要保存的菜单ID
+        const allSelectedIds = [...selectedMenuIds, ...halfCheckedKeys]
         
         const response = await apiService.roles.updateRoleMenus(
           this.role.id, 
-          { menu_ids: selectedMenuIds }
+          { menu_ids: allSelectedIds }
         )
         
         if (response.code === 200) {
@@ -188,6 +274,12 @@ export default {
 
 .filter-input {
   margin-bottom: 15px;
+}
+
+.batch-operations {
+  margin-bottom: 15px;
+  display: flex;
+  gap: 8px;
 }
 
 .menu-tree {

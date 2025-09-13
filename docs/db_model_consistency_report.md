@@ -1,0 +1,157 @@
+=== 数据库概览 ===
+数据库路径: D:\newCheguan\backend\app\utils\..\..\database.db
+表数量: 17
+
+表: alembic_version
+  字段: version_num
+
+表: Company
+  字段: id, name, bank_name, account_number, address, contact_person, contact_phone, created_at, updated_at
+
+表: Role
+  字段: id, name, description, created_at, updated_at
+
+表: manual_dispatch_tasks
+  字段: task_id, required_date, start_bureau, route_direction, carrier_company, route_name, transport_type, requirement_type, volume, weight, special_requirements, status, dispatch_track, initiator_role, initiator_user_id, initiator_department, audit_required, auditor_role, auditor_user_id, audit_status, audit_time, audit_note, current_handler_role, current_handler_user_id, created_at, updated_at, assigned_supplier_id
+
+表: vehicle_capacity_reference
+  字段: id, vehicle_type, standard_volume, license_plate, suppliers, created_at, updated_at
+
+表: Permission
+  字段: id, name, code, description, resource_type, resource_id, action, created_at, updated_at
+
+表: Menu
+  字段: id, name, code, path, component, icon, parent_id, sort_order, is_active, created_at, updated_at
+
+表: User
+  字段: id, username, password, full_name, email, phone, company_id, is_active, created_at, updated_at
+
+表: vehicles
+  字段: id, task_id, manifest_number, dispatch_number, license_plate, carriage_number, created_at, notes, actual_volume, volume_photo_url, volume_modified_by, required_volume, confirmed_volume, vehicle_type, supplier_id, supplier_type, driver_name, driver_phone, driver_id_card, status, confirmed_by, confirmed_at, is_merged, is_downgraded, original_capacity, updated_at
+
+表: dispatch_status_history
+  字段: id, task_id, status_change, operator, timestamp, note
+
+表: MenuPermission
+  字段: id, menu_id, permission_id
+
+表: UserRole
+  字段: user_id, role_id, created_at
+
+表: vehicle_volume_history
+  字段: id, vehicle_id, original_volume, new_volume, reason, modified_by, modified_at, volume_photo_url, approval_doc_url
+
+表: RolePermission
+  字段: id, role_id, permission_id, granted_at, granted_by
+
+表: operation_logs
+  字段: id, task_id, user_id, user_role, operation_type, operation_content, ip_address, operation_time
+
+表: vehicle_merge_records
+  字段: id, source_vehicle_id, target_vehicle_id, merge_time, operator_id, operator_role, original_volume, merged_volume, merge_reason
+
+表: vehicle_downgrade_records
+  字段: id, vehicle_id, downgrade_time, operator_id, operator_role, original_type, downgraded_type, original_volume, downgraded_volume, downgrade_reason
+
+=== 模型概览 ===
+模型数量: 15
+关联表数量: 1
+
+模型: User (表名: User)
+  字段: id, username, password, full_name, email, phone, company_id, is_active, created_at, updated_at
+
+模型: Company (表名: Company)
+  字段: id, name, bank_name, account_number, address, contact_person, contact_phone, created_at, updated_at
+
+模型: Role (表名: Role)
+  字段: id, name, description, created_at, updated_at
+
+模型: ManualDispatchTask (表名: manual_dispatch_tasks)
+  字段: task_id, required_date, start_bureau, route_direction, carrier_company, route_name, transport_type, requirement_type, volume, weight, special_requirements, status, dispatch_track, initiator_role, initiator_user_id, initiator_department, audit_required, auditor_role, auditor_user_id, audit_status, audit_time, audit_note, current_handler_role, current_handler_user_id, created_at, updated_at, assigned_supplier_id
+
+模型: Vehicle (表名: vehicles)
+  字段: id, task_id, manifest_number, dispatch_number, license_plate, carriage_number, created_at, notes, actual_volume, volume_photo_url, volume_modified_by, required_volume, confirmed_volume, vehicle_type, supplier_id, supplier_type, driver_name, driver_phone, driver_id_card, status, confirmed_by, confirmed_at, is_merged, is_downgraded, original_capacity, updated_at
+
+模型: DispatchStatusHistory (表名: dispatch_status_history)
+  字段: id, task_id, status_change, operator, timestamp, note
+
+模型: VehicleCapacityReference (表名: vehicle_capacity_reference)
+  字段: id, vehicle_type, standard_volume, license_plate, suppliers, created_at, updated_at
+
+模型: Permission (表名: Permission)
+  字段: id, name, code, description, resource_type, resource_id, action, created_at, updated_at
+
+模型: Menu (表名: Menu)
+  字段: id, name, code, path, component, icon, parent_id, sort_order, is_active, created_at, updated_at
+
+模型: RolePermission (表名: RolePermission)
+  字段: id, role_id, permission_id, granted_at, granted_by
+
+模型: MenuPermission (表名: MenuPermission)
+  字段: id, menu_id, permission_id
+
+模型: OperationLog (表名: operation_logs)
+  字段: id, task_id, user_id, user_role, operation_type, operation_content, ip_address, operation_time
+
+模型: VehicleVolumeHistory (表名: vehicle_volume_history)
+  字段: id, vehicle_id, original_volume, new_volume, reason, modified_by, modified_at, volume_photo_url, approval_doc_url
+
+模型: VehicleDowngradeRecord (表名: vehicle_downgrade_records)
+  字段: id, vehicle_id, downgrade_time, operator_id, operator_role, original_type, downgraded_type, original_volume, downgraded_volume, downgrade_reason
+
+模型: VehicleMergeRecord (表名: vehicle_merge_records)
+  字段: id, source_vehicle_id, target_vehicle_id, merge_time, operator_id, operator_role, original_volume, merged_volume, merge_reason
+
+关联表: UserRole
+  字段: user_id, role_id, created_at
+
+=== 数据库模型一致性检查报告 ===
+检查时间: 2025-09-12 08:33:00
+
+检查模型: User (表名: User)
+  ✅ 表结构一致
+
+检查模型: Company (表名: Company)
+  ✅ 表结构一致
+
+检查模型: Role (表名: Role)
+  ✅ 表结构一致
+
+检查模型: ManualDispatchTask (表名: manual_dispatch_tasks)
+  ✅ 表结构一致
+
+检查模型: Vehicle (表名: vehicles)
+  ✅ 表结构一致
+
+检查模型: DispatchStatusHistory (表名: dispatch_status_history)
+  ✅ 表结构一致
+
+检查模型: VehicleCapacityReference (表名: vehicle_capacity_reference)
+  ✅ 表结构一致
+
+检查模型: Permission (表名: Permission)
+  ✅ 表结构一致
+
+检查模型: Menu (表名: Menu)
+  ✅ 表结构一致
+
+检查模型: RolePermission (表名: RolePermission)
+  ✅ 表结构一致
+
+检查模型: MenuPermission (表名: MenuPermission)
+  ✅ 表结构一致
+
+检查模型: OperationLog (表名: operation_logs)
+  ✅ 表结构一致
+
+检查模型: VehicleVolumeHistory (表名: vehicle_volume_history)
+  ✅ 表结构一致
+
+检查模型: VehicleDowngradeRecord (表名: vehicle_downgrade_records)
+  ✅ 表结构一致
+
+检查模型: VehicleMergeRecord (表名: vehicle_merge_records)
+  ✅ 表结构一致
+
+检查关联表: UserRole
+  ✅ 表结构一致

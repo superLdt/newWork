@@ -248,12 +248,12 @@ export const apiService = {
     
     // 获取角色权限
     getRolePermissions: (roleId) => {
-      return api.get(`/roles/${roleId}/permissions`)
+      return api.get(`/role-permissions/roles/${roleId}/permissions`)
     },
     
     // 更新角色权限
     updateRolePermissions: (roleId, permissionData) => {
-      return api.put(`/roles/${roleId}/permissions`, permissionData)
+      return api.put(`/role-permissions/roles/${roleId}/permissions`, permissionData)
     },
     
     // 获取角色菜单权限
@@ -270,8 +270,8 @@ export const apiService = {
   // 菜单管理相关API
   menus: {
     // 获取所有菜单
-    getMenus: () => {
-      return api.get('/menus')
+    getMenus: (params = {}) => {
+      return api.get('/menus', { params })
     },
     
     // 获取菜单详情

@@ -1,5 +1,6 @@
 from flask import Blueprint
 from .dispatch_controller import DispatchController
+from .dashboard_controller import DashboardController
 
 # 创建派车管理蓝图（挂载到/api/v1/dispatch）
 dispatch_bp = Blueprint('dispatch', __name__, url_prefix='/dispatch')
@@ -42,3 +43,15 @@ dispatch_bp.route('/vehicles/<int:vehicle_id>/downgrade', methods=['POST'])(Disp
 
 # 获取车辆降档历史路由
 dispatch_bp.route('/vehicles/<int:vehicle_id>/downgrade-history', methods=['GET'])(DispatchController.get_vehicle_downgrade_history)
+
+# 仪表盘统计概览路由
+dispatch_bp.route('/dashboard/statistics', methods=['GET'])(DashboardController.get_dashboard_statistics)
+
+# 仪表盘分布数据路由
+dispatch_bp.route('/dashboard/distributions', methods=['GET'])(DashboardController.get_dashboard_distributions)
+
+# 紧急任务列表路由
+dispatch_bp.route('/dashboard/urgent-tasks', methods=['GET'])(DashboardController.get_urgent_tasks)
+
+# 完整仪表盘数据路由
+dispatch_bp.route('/dashboard/complete', methods=['GET'])(DashboardController.get_complete_dashboard)

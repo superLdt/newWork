@@ -5,6 +5,7 @@ import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue/global'
 import App from './App.vue'
 import router from './router'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 // 权限相关导入
 import { setupPermissionGuard } from '@/guards/permission'
@@ -25,7 +26,7 @@ app.directive('admin', admin)
 
 // 使用插件
 app.use(pinia)
-app.use(ElementPlus)
+app.use(ElementPlus, { locale: zhCn })
 app.use(router)
 
 // 设置路由权限守卫

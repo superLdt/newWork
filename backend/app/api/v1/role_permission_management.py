@@ -174,43 +174,42 @@ def batch_revoke_permissions_from_role(role_id):
         return error_response(message=f'批量权限撤销失败: {str(e)}')
 
 
-@bp.route('/roles/<int:role_id>/permissions/sync', methods=['POST'])
+@bp.route('/roles/<int:role_id>/permissions', methods=['PUT'])
 @token_required
-def sync_role_permissions(role_id):
+def update_role_permissions(role_id):
     """
-    同步角色权限（先清空再重新分配）
-    
-    Args:
-        role_id: 角色ID
-        
+    更新（同步）角色权限
+    - 该接口与前端 PUT /role-permissions/roles/:role_id/permissions 对齐
+    - 行为等同于“同步”：先清空再按传入的 permission_ids 重新分配，确保幂等
+
     Request Body:
-        permission_ids (list): 新的权限ID列表
+        permission_ids (list[int]): 新的权限ID列表
     """
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         permission_ids = data.get('permission_ids', [])
         granted_by = g.current_user.id
-        
+
         role_permissions = RolePermissionService.sync_role_permissions(
             role_id, permission_ids, granted_by
         )
-        
+
         # 清除角色缓存
         PermissionCacheService.invalidate_role_cache(role_id)
-        
+
         return success_response(
             data={
                 'role_id': role_id,
                 'synced_count': len(role_permissions),
                 'permission_ids': permission_ids
             },
-            message=f'角色权限同步成功，共配置 {len(role_permissions)} 个权限'
+            message=f'角色权限更新成功，共配置 {len(role_permissions)} 个权限'
         )
-        
+
     except ValueError as e:
         return error_response(message=str(e), code=400)
     except Exception as e:
-        return error_response(message=f'角色权限同步失败: {str(e)}')
+        return error_response(message=f'角色权限更新失败: {str(e)}')
 
 
 @bp.route('/permissions/<int:permission_id>/roles', methods=['GET'])

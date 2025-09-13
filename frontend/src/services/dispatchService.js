@@ -13,8 +13,27 @@ export const dispatchService = {
    */
   async getTasks(params = {}) {
     try {
-      const response = await apiClient.get('/dispatch/tasks', { params })
-      return response.data
+      const data = await apiClient.get('/dispatch/tasks', { params })
+      // 统一成功判定：后端 code 200/201/0 或 success=true 均视为成功
+      if (
+        data && (data.code === 0 || data.code === 200 || data.code === 201 || data.success === true)
+      ) {
+        const payload = data.data !== undefined ? data.data : data
+        const items = Array.isArray(payload) ? payload : (payload.items || [])
+        const total = Array.isArray(payload) ? payload.length : (payload.total || 0)
+        return {
+          code: 0,
+          message: data.message || '获取派车任务成功',
+          data: {
+            items,
+            total,
+            page: params.page,
+            per_page: params.per_page
+          }
+        }
+      }
+      // 未识别为成功，抛出错误让调用方进入 catch 分支
+      throw new Error(data?.message || '获取派车任务失败')
     } catch (error) {
       console.error('获取派车任务列表失败:', error)
       throw error
@@ -29,7 +48,7 @@ export const dispatchService = {
   async getTaskDetail(taskId) {
     try {
       const response = await apiClient.get(`/dispatch/tasks/${taskId}`)
-      return response.data
+      return response
     } catch (error) {
       console.error('获取派车任务详情失败:', error)
       throw error
@@ -43,11 +62,32 @@ export const dispatchService = {
    */
   async createTask(taskData) {
     try {
-      const response = await apiClient.post('/dispatch/tasks', taskData)
-      return response.data
+      const data = await apiClient.post('/dispatch/tasks', taskData)
+      // 统一响应格式：
+      // - 后端 body.code = 200/201 视为成功
+      // - 或 body.code = 0（已是规范化）视为成功
+      // - 或 body.success === true 视为成功（另一类返回规范）
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '创建任务成功',
+          // 若后端直接返回实体对象，则回传 data 本体；若包装在 data 字段则优先返回内部 data
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      // 其他情况原样返回，交由调用方处理
+      return data
     } catch (error) {
       console.error('创建派车任务失败:', error)
-      throw error
+      // api 拦截器已将错误标准化为 { code, message, data }
+      return error
     }
   },
 
@@ -60,7 +100,7 @@ export const dispatchService = {
   async updateTask(taskId, taskData) {
     try {
       const response = await apiClient.put(`/dispatch/tasks/${taskId}`, taskData)
-      return response.data
+      return response
     } catch (error) {
       console.error('更新派车任务失败:', error)
       throw error
@@ -76,7 +116,7 @@ export const dispatchService = {
   async auditTask(taskId, auditData) {
     try {
       const response = await apiClient.post(`/dispatch/tasks/${taskId}/audit`, auditData)
-      return response.data
+      return response
     } catch (error) {
       console.error('审核派车任务失败:', error)
       throw error
@@ -92,7 +132,7 @@ export const dispatchService = {
   async assignVehicles(taskId, assignData) {
     try {
       const response = await apiClient.post(`/dispatch/tasks/${taskId}/assign`, assignData)
-      return response.data
+      return response
     } catch (error) {
       console.error('分配车辆失败:', error)
       throw error
@@ -108,7 +148,7 @@ export const dispatchService = {
   async completeTask(taskId, completeData) {
     try {
       const response = await apiClient.post(`/dispatch/tasks/${taskId}/complete`, completeData)
-      return response.data
+      return response
     } catch (error) {
       console.error('完成派车任务失败:', error)
       throw error
@@ -123,9 +163,96 @@ export const dispatchService = {
   async getAvailableVehicles(params = {}) {
     try {
       const response = await apiClient.get('/vehicles/available', { params })
-      return response.data
+      return response
     } catch (error) {
       console.error('获取可用车辆列表失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 获取仪表盘统计数据
+   * @returns {Promise} - 返回仪表盘数据
+   */
+  async getDashboardData() {
+    try {
+      const data = await apiClient.get('/dispatch/dashboard/complete')
+      // 统一成功判定：后端 code 200/201/0 或 success=true 均视为成功
+      if (
+        data && (data.code === 0 || data.code === 200 || data.code === 201 || data.success === true)
+      ) {
+        const payload = data.data !== undefined ? data.data : data
+        const statistics = payload.statistics || {}
+        const status_distribution = payload.status_distribution || []
+        const track_distribution = payload.track_distribution || []
+        const urgent_task_list = payload.urgent_tasks || payload.urgent_task_list || []
+
+        // 扁平化并对齐前端组件期望字段
+        const normalized = {
+          total_tasks: statistics.total_tasks || 0,
+          today_tasks: statistics.today_new_tasks || statistics.today_tasks || 0,
+          timeout_tasks: statistics.expiring_tasks || statistics.timeout_tasks || 0,
+          status_distribution,
+          track_distribution,
+          urgent_task_list,
+          // 提供紧急任务数量给顶部卡片使用
+          urgent_tasks: Array.isArray(urgent_task_list)
+            ? urgent_task_list.length
+            : (typeof urgent_task_list === 'number' ? urgent_task_list : 0)
+        }
+
+        return {
+          code: 0,
+          message: data.message || '获取仪表盘数据成功',
+          data: normalized
+        }
+      }
+      // 未识别为成功，抛出错误让调用方进入 catch 分支
+      throw new Error(data?.message || '获取仪表盘数据失败')
+    } catch (error) {
+      console.error('获取仪表盘数据失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 获取统计概览数据
+   * @returns {Promise} - 返回统计概览数据
+   */
+  async getDashboardStatistics() {
+    try {
+      const response = await apiClient.get('/dispatch/dashboard/statistics')
+      return response
+    } catch (error) {
+      console.error('获取统计概览数据失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 获取分布数据
+   * @returns {Promise} - 返回分布数据
+   */
+  async getDashboardDistributions() {
+    try {
+      const response = await apiClient.get('/dispatch/dashboard/distributions')
+      return response
+    } catch (error) {
+      console.error('获取分布数据失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 获取紧急任务列表
+   * @returns {Promise} - 返回紧急任务列表
+   */
+  async getUrgentTasks() {
+    try {
+      const response = await apiClient.get('/dispatch/dashboard/urgent-tasks')
+      return response
+    } catch (error) {
+      console.error('获取紧急任务列表失败:', error)
       throw error
     }
   }

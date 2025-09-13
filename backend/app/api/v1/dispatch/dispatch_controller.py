@@ -63,8 +63,8 @@ class DispatchController:
             if status:
                 filters['status'] = status
             if query:
-                # 将通用查询映射为按路线名称模糊查询
-                filters['route_name'] = query
+                # 将通用查询映射为按邮路名称模糊查询
+                filters['mail_route_name'] = query
             tasks, total = DispatchService.get_task_list(page, per_page, filters)
             
             # 返回成功响应
@@ -128,29 +128,43 @@ class DispatchController:
             schema:
               type: object
               properties:
-                title:
+                required_date:
                   type: string
-                  description: 任务标题
-                description:
+                  format: date
+                  description: 需求日期
+                origin_bureau:
                   type: string
-                  description: 任务描述
-                start_time:
+                  description: 始发局
+                mail_route_name:
                   type: string
-                  format: date-time
-                  description: 开始时间
-                end_time:
+                  description: 邮路名称
+                organizing_unit:
                   type: string
-                  format: date-time
-                  description: 结束时间
-                location:
+                  description: 组开单位（承运商）
+                transport_type:
                   type: string
-                  description: 地点
-                contact_person:
+                  description: 运输类型
+                requirement_type:
                   type: string
-                  description: 联系人
-                contact_phone:
+                  description: 需求类型
+                standard_weight:
                   type: string
-                  description: 联系电话
+                  description: 标准吨位
+                standard_volume:
+                  type: integer
+                  description: 标准容积
+                actual_volume:
+                  type: integer
+                  description: 实际需求容积
+                special_requirements:
+                  type: string
+                  description: 特殊要求
+                initiator_department:
+                  type: string
+                  description: 发起人部门
+                audit_required:
+                  type: boolean
+                  description: 是否需要审核
         responses:
           201:
             description: 成功创建派车任务
@@ -176,7 +190,7 @@ class DispatchController:
             task = DispatchService.create_dispatch_task(data)
             
             # 返回成功响应
-            return success_response(task, 201)
+            return success_response(task, code=201)
         except Exception as e:
             logger.error(f"创建派车任务失败: {str(e)}")
             return error_response(str(e), 500)
@@ -192,7 +206,7 @@ class DispatchController:
         parameters:
           - name: task_id
             in: path
-            type: integer
+            type: string
             required: true
             description: 任务ID
           - name: body
@@ -201,29 +215,43 @@ class DispatchController:
             schema:
               type: object
               properties:
-                title:
+                required_date:
                   type: string
-                  description: 任务标题
-                description:
+                  format: date
+                  description: 需求日期
+                origin_bureau:
                   type: string
-                  description: 任务描述
-                start_time:
+                  description: 始发局
+                mail_route_name:
                   type: string
-                  format: date-time
-                  description: 开始时间
-                end_time:
+                  description: 邮路名称
+                organizing_unit:
                   type: string
-                  format: date-time
-                  description: 结束时间
-                location:
+                  description: 组开单位（承运商）
+                transport_type:
                   type: string
-                  description: 地点
-                contact_person:
+                  description: 运输类型
+                requirement_type:
                   type: string
-                  description: 联系人
-                contact_phone:
+                  description: 需求类型
+                standard_weight:
                   type: string
-                  description: 联系电话
+                  description: 标准吨位
+                standard_volume:
+                  type: integer
+                  description: 标准容积
+                actual_volume:
+                  type: integer
+                  description: 实际需求容积
+                special_requirements:
+                  type: string
+                  description: 特殊要求
+                initiator_department:
+                  type: string
+                  description: 发起人部门
+                audit_required:
+                  type: boolean
+                  description: 是否需要审核
         responses:
           200:
             description: 成功更新派车任务
@@ -301,7 +329,7 @@ class DispatchController:
             # 获取请求数据
             data = request.get_json()
             
-            # 验证请求数据
+            # 验�证请求数据
             if not data:
                 return error_response("请求数据不能为空", 400)
             

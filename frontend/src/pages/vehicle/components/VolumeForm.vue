@@ -142,7 +142,7 @@
 </template>
 
 <script>
-import { updateVehicleVolume } from '@/api/vehicle';
+import { updateVehicleVolume } from '@/services/vehicleService';
 
 export default {
   name: 'VolumeForm',

@@ -76,6 +76,7 @@ class Permission(db.Model):
             {'name': '权限管理菜单', 'code': 'menu:permission_management', 'description': '访问权限管理菜单', 'resource_type': 'menu', 'resource_id': '/settings/permissions', 'action': 'read'},
             {'name': '基础数据菜单', 'code': 'menu:basic_data', 'description': '访问基础数据菜单', 'resource_type': 'menu', 'resource_id': '/basic-data', 'action': 'read'},
             {'name': '调度管理菜单', 'code': 'menu:dispatch', 'description': '访问调度管理菜单', 'resource_type': 'menu', 'resource_id': '/dispatch', 'action': 'read'},
+            {'name': '运输订单菜单', 'code': 'menu:transport_orders', 'description': '访问运输订单菜单', 'resource_type': 'menu', 'resource_id': '/dispatch/orders', 'action': 'read'},
             
             # 基础数据权限
             {'name': '查看车辆', 'code': 'vehicle:read', 'description': '查看车辆列表和详情', 'resource_type': 'api', 'resource_id': '/vehicles', 'action': 'read'},

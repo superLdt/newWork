@@ -39,10 +39,10 @@ class DispatchService:
             if filters:
                 if filters.get('status'):
                     query_obj = query_obj.filter(ManualDispatchTask.status == filters['status'])
-                if filters.get('route_name'):
-                    query_obj = query_obj.filter(ManualDispatchTask.route_name.ilike(f"%{filters['route_name']}%"))
-                if filters.get('start_bureau'):
-                    query_obj = query_obj.filter(ManualDispatchTask.start_bureau.ilike(f"%{filters['start_bureau']}%"))
+                if filters.get('mail_route_name'):
+                    query_obj = query_obj.filter(ManualDispatchTask.mail_route_name.ilike(f"%{filters['mail_route_name']}%"))
+                if filters.get('origin_bureau'):
+                    query_obj = query_obj.filter(ManualDispatchTask.origin_bureau.ilike(f"%{filters['origin_bureau']}%"))
                 if filters.get('required_date_start') and filters.get('required_date_end'):
                     query_obj = query_obj.filter(
                         ManualDispatchTask.required_date >= filters['required_date_start'],
@@ -101,29 +101,78 @@ class DispatchService:
             Dict: 创建的任务信息
         """
         try:
-            # 生成任务ID
-            task_id = f"T{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6]}"
+            from flask import g
             
-            # 创建任务对象
+            # 生成任务ID
+            task_id = f"T{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6].upper()}"
+            
+            # 获取当前用户信息
+            current_user = getattr(g, 'current_user', None)
+            current_user_id = current_user.id if current_user else task_data.get('initiator_user_id', 1)
+            
+            # 获取当前用户角色（取第一个角色作为主要角色）
+            current_user_role = None
+            if current_user and current_user.roles:
+                current_user_role = current_user.roles[0].name
+            else:
+                current_user_role = task_data.get('initiator_role', '车间地调')
+            
+            # 确定派车轨道和初始状态
+            dispatch_track = task_data.get('dispatch_track', '轨道A')
+            requirement_type = task_data.get('requirement_type', '加班派车')
+            
+            # 根据用户角色和需求类型确定轨道和状态
+            if current_user_role == '车间地调':
+                # 车间地调只能使用轨道A，需要审核
+                dispatch_track = '轨道A'
+                initial_status = '待审核'
+                audit_required = True
+                current_handler_role = '区域调度员'
+            elif current_user_role in ['超级管理员', '区域调度员']:
+                # 管理员和区域调度员可以选择轨道
+                if requirement_type == '正班派车':
+                    # 正班派车直接下发，使用轨道B
+                    dispatch_track = '轨道B'
+                    initial_status = '待供应商响应'
+                    audit_required = False
+                    current_handler_role = '供应商'
+                else:
+                    # 加班派车根据选择的轨道确定流程
+                    if dispatch_track == '轨道A':
+                        initial_status = '待审核'
+                        audit_required = True
+                        current_handler_role = '区域调度员'
+                    else:  # 轨道B
+                        initial_status = '待供应商响应'
+                        audit_required = False
+                        current_handler_role = '供应商'
+            else:
+                # 其他角色默认使用轨道A
+                dispatch_track = '轨道A'
+                initial_status = '待审核'
+                audit_required = True
+                current_handler_role = '区域调度员'
+            
+            # 创建任务对象，确保所有字段都正确映射
             task = ManualDispatchTask(
                 task_id=task_id,
                 required_date=task_data.get('required_date'),
-                start_bureau=task_data.get('start_bureau'),
-                route_direction=task_data.get('route_direction'),
-                carrier_company=task_data.get('carrier_company'),
-                route_name=task_data.get('route_name'),
+                origin_bureau=task_data.get('origin_bureau'),
+                mail_route_name=task_data.get('mail_route_name'),
+                organizing_unit=task_data.get('organizing_unit'),
                 transport_type=task_data.get('transport_type'),
-                requirement_type=task_data.get('requirement_type'),
-                volume=task_data.get('volume'),
-                weight=task_data.get('weight'),
+                requirement_type=requirement_type,
+                standard_weight=task_data.get('standard_weight'),
+                standard_volume=task_data.get('standard_volume'),
+                actual_volume=task_data.get('actual_volume'),
                 special_requirements=task_data.get('special_requirements'),
-                status='待审核',
-                dispatch_track=task_data.get('dispatch_track'),
-                initiator_role=task_data.get('initiator_role'),
-                initiator_user_id=task_data.get('initiator_user_id'),
+                status=task_data.get('status', initial_status),
+                dispatch_track=dispatch_track,
+                initiator_role=current_user_role,
+                initiator_user_id=current_user_id,
                 initiator_department=task_data.get('initiator_department'),
-                audit_required=task_data.get('audit_required', True),
-                current_handler_role='审核员',
+                audit_required=audit_required,
+                current_handler_role=current_handler_role,
                 created_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 updated_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             )
@@ -135,9 +184,9 @@ class DispatchService:
             status_history = DispatchStatusHistory(
                 task_id=task_id,
                 status_change='创建任务',
-                operator=f"用户ID: {task_data.get('initiator_user_id')}",
+                operator=f"用户ID: {current_user_id}, 角色: {current_user_role}",
                 timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                note='任务创建'
+                note=f'任务创建，轨道: {dispatch_track}，初始状态: {initial_status}'
             )
             db.session.add(status_history)
             
@@ -145,8 +194,8 @@ class DispatchService:
             operation_log = OperationLog(
                 task_id=task_id,
                 operation_type='创建任务',
-                user_id=task_data.get('initiator_user_id'),
-                user_role=task_data.get('initiator_role'),
+                user_id=current_user_id,
+                user_role=current_user_role,
                 operation_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 operation_content='创建派车任务',
                 ip_address=task_data.get('ip_address')

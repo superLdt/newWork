@@ -58,11 +58,11 @@
 | 字段名 | 数据类型 | 约束 | 说明 |
 |--------|----------|------|------|
 | `id` | INTEGER | PRIMARY KEY | 车辆唯一ID |
-| `task_id` | TEXT | NULL | 关联任务ID |
-| `manifest_number` | TEXT | NULL | 货票号 |
+| `task_id` | TEXT | FOREIGN KEY | 关联任务ID |
+| `manifest_number` | TEXT | NULL | 路单流水号 |
 | `dispatch_number` | TEXT | NULL | 派车单号 |
 | `license_plate` | TEXT | NULL | 车牌号 |
-| `carriage_number` | TEXT | NULL | 车皮号 |
+| `carriage_number` | TEXT | NULL | 车厢号 |
 | `created_at` | TEXT | NULL | 创建时间 |
 | `notes` | TEXT | NULL | 备注 |
 | `actual_volume` | REAL | NULL | 实际容积 |
@@ -70,13 +70,23 @@
 | `volume_modified_by` | INTEGER | NULL | 容积修改人 |
 | `required_volume` | REAL | NULL | 需求容积 |
 | `confirmed_volume` | REAL | NULL | 确认容积 |
+| `vehicle_type` | TEXT | NULL | 车辆类型 |
+| `supplier_id` | INTEGER | NULL | 供应商ID |
+| `supplier_type` | TEXT | NULL | 供应商类型 |
+| `status` | TEXT | NULL | 车辆状态 |
+| `confirmed_by` | INTEGER | NULL | 确认人ID |
+| `confirmed_at` | TEXT | NULL | 确认时间 |
+| `is_merged` | BOOLEAN | NULL | 是否已合并 |
+| `is_downgraded` | BOOLEAN | NULL | 是否已降档 |
+| `original_capacity` | REAL | NULL | 原始容积 |
+| `updated_at` | TEXT | NULL | 更新时间 |
 
 ### 3.3 状态历史表（dispatch_status_history）
 
 | 字段名 | 数据类型 | 约束 | 说明 |
 |--------|----------|------|------|
 | `id` | INTEGER | PRIMARY KEY | 历史记录ID |
-| `task_id` | TEXT | NULL | 关联任务ID |
+| `task_id` | TEXT | FOREIGN KEY | 关联任务ID |
 | `status_change` | TEXT | NULL | 状态变更 |
 | `operator` | TEXT | NULL | 操作人 |
 | `timestamp` | TEXT | NULL | 时间戳 |
@@ -87,13 +97,13 @@
 | 字段名 | 数据类型 | 约束 | 说明 |
 |--------|----------|------|------|
 | `id` | INTEGER | PRIMARY KEY | 用户唯一ID |
-| `username` | TEXT | NULL | 用户名 |
-| `password` | TEXT | NULL | 密码（加密存储） |
+| `username` | TEXT | UNIQUE | 用户名 |
+| `password` | TEXT | NOT NULL | 密码（加密存储） |
 | `full_name` | TEXT | NULL | 姓名 |
 | `email` | TEXT | NULL | 邮箱 |
 | `phone` | TEXT | NULL | 手机号 |
-| `company_id` | INTEGER | NULL | 所属公司ID |
-| `is_active` | BOOLEAN | NULL | 是否激活 |
+| `company_id` | INTEGER | FOREIGN KEY | 所属公司ID |
+| `is_active` | BOOLEAN | DEFAULT TRUE | 是否激活 |
 | `created_at` | TIMESTAMP | NULL | 创建时间 |
 | `updated_at` | TIMESTAMP | NULL | 更新时间 |
 
@@ -102,7 +112,7 @@
 | 字段名 | 数据类型 | 约束 | 说明 |
 |--------|----------|------|------|
 | `id` | INTEGER | PRIMARY KEY | 角色唯一ID |
-| `name` | TEXT | NULL | 角色名称 |
+| `name` | TEXT | UNIQUE | 角色名称 |
 | `description` | TEXT | NULL | 角色描述 |
 | `created_at` | TIMESTAMP | NULL | 创建时间 |
 | `updated_at` | TIMESTAMP | NULL | 更新时间 |
@@ -113,13 +123,14 @@
 |--------|----------|------|------|
 | `user_id` | INTEGER | PRIMARY KEY, FOREIGN KEY | 用户ID |
 | `role_id` | INTEGER | PRIMARY KEY, FOREIGN KEY | 角色ID |
+| `created_at` | TIMESTAMP | NULL | 创建时间 |
 
 ### 3.7 公司表（Company）
 
 | 字段名 | 数据类型 | 约束 | 说明 |
 |--------|----------|------|------|
 | `id` | INTEGER | PRIMARY KEY | 公司唯一ID |
-| `name` | TEXT | NULL | 公司名称 |
+| `name` | TEXT | UNIQUE | 公司名称 |
 | `bank_name` | TEXT | NULL | 银行名称 |
 | `account_number` | TEXT | NULL | 银行账号 |
 | `address` | TEXT | NULL | 公司地址 |
@@ -139,6 +150,110 @@
 | `suppliers` | TEXT | NULL | 供应商信息 |
 | `created_at` | TEXT | NULL | 创建时间 |
 | `updated_at` | TEXT | NULL | 更新时间 |
+
+### 3.9 权限表（Permission）
+
+| 字段名 | 数据类型 | 约束 | 说明 |
+|--------|----------|------|------|
+| `id` | INTEGER | PRIMARY KEY | 权限唯一ID |
+| `name` | TEXT | NOT NULL | 权限名称 |
+| `code` | TEXT | UNIQUE | 权限代码 |
+| `description` | TEXT | NULL | 权限描述 |
+| `resource_type` | TEXT | NOT NULL | 资源类型: menu, api, button |
+| `resource_id` | TEXT | NULL | 资源标识 |
+| `action` | TEXT | NOT NULL | 操作类型: read, write, delete, execute |
+| `created_at` | TIMESTAMP | NULL | 创建时间 |
+| `updated_at` | TIMESTAMP | NULL | 更新时间 |
+
+### 3.10 菜单表（Menu）
+
+| 字段名 | 数据类型 | 约束 | 说明 |
+|--------|----------|------|------|
+| `id` | INTEGER | PRIMARY KEY | 菜单唯一ID |
+| `name` | TEXT | NOT NULL | 菜单名称 |
+| `code` | TEXT | UNIQUE | 菜单代码 |
+| `path` | TEXT | NULL | 路由路径 |
+| `component` | TEXT | NULL | 组件路径 |
+| `icon` | TEXT | NULL | 图标 |
+| `parent_id` | INTEGER | FOREIGN KEY | 父菜单ID |
+| `sort_order` | INTEGER | DEFAULT 0 | 排序 |
+| `is_active` | BOOLEAN | DEFAULT TRUE | 是否启用 |
+| `created_at` | TIMESTAMP | NULL | 创建时间 |
+| `updated_at` | TIMESTAMP | NULL | 更新时间 |
+
+### 3.11 角色权限关联表（RolePermission）
+
+| 字段名 | 数据类型 | 约束 | 说明 |
+|--------|----------|------|------|
+| `id` | INTEGER | PRIMARY KEY | 关联记录唯一ID |
+| `role_id` | INTEGER | FOREIGN KEY | 角色ID |
+| `permission_id` | INTEGER | FOREIGN KEY | 权限ID |
+| `granted_at` | TIMESTAMP | NULL | 授权时间 |
+| `granted_by` | INTEGER | FOREIGN KEY | 授权人ID |
+
+### 3.12 菜单权限关联表（MenuPermission）
+
+| 字段名 | 数据类型 | 约束 | 说明 |
+|--------|----------|------|------|
+| `id` | INTEGER | PRIMARY KEY | 关联记录唯一ID |
+| `menu_id` | INTEGER | FOREIGN KEY | 菜单ID |
+| `permission_id` | INTEGER | FOREIGN KEY | 权限ID |
+
+### 3.13 操作日志表（operation_logs）
+
+| 字段名 | 数据类型 | 约束 | 说明 |
+|--------|----------|------|------|
+| `id` | INTEGER | PRIMARY KEY | 日志ID |
+| `task_id` | TEXT | FOREIGN KEY | 关联任务ID |
+| `user_id` | INTEGER | FOREIGN KEY | 操作用户ID |
+| `user_role` | TEXT | NULL | 操作用户角色 |
+| `operation_type` | TEXT | NULL | 操作类型 |
+| `operation_content` | TEXT | NULL | 操作内容 |
+| `ip_address` | TEXT | NULL | IP地址 |
+| `operation_time` | TEXT | NULL | 操作时间 |
+
+### 3.14 车辆容积更新历史表（vehicle_volume_history）
+
+| 字段名 | 数据类型 | 约束 | 说明 |
+|--------|----------|------|------|
+| `id` | INTEGER | PRIMARY KEY | 记录ID |
+| `vehicle_id` | INTEGER | FOREIGN KEY | 车辆ID |
+| `original_volume` | REAL | NULL | 原始容积 |
+| `new_volume` | REAL | NULL | 新容积 |
+| `reason` | TEXT | NULL | 修改原因 |
+| `modified_by` | INTEGER | FOREIGN KEY | 修改人ID |
+| `modified_at` | TIMESTAMP | NULL | 修改时间 |
+| `volume_photo_url` | TEXT | NULL | 容积照片URL |
+| `approval_doc_url` | TEXT | NULL | 审批凭证URL |
+
+### 3.15 车辆合并记录表（vehicle_merge_records）
+
+| 字段名 | 数据类型 | 约束 | 说明 |
+|--------|----------|------|------|
+| `id` | INTEGER | PRIMARY KEY | 记录ID |
+| `source_vehicle_id` | INTEGER | FOREIGN KEY | 源车辆ID |
+| `target_vehicle_id` | INTEGER | FOREIGN KEY | 目标车辆ID |
+| `merge_time` | TEXT | NULL | 合并时间 |
+| `operator_id` | INTEGER | FOREIGN KEY | 操作人ID |
+| `operator_role` | TEXT | NULL | 操作人角色 |
+| `original_volume` | REAL | NULL | 原始容积 |
+| `merged_volume` | REAL | NULL | 合并后容积 |
+| `merge_reason` | TEXT | NULL | 合并原因 |
+
+### 3.16 车辆降档记录表（vehicle_downgrade_records）
+
+| 字段名 | 数据类型 | 约束 | 说明 |
+|--------|----------|------|------|
+| `id` | INTEGER | PRIMARY KEY | 记录ID |
+| `vehicle_id` | INTEGER | FOREIGN KEY | 车辆ID |
+| `downgrade_time` | TEXT | NULL | 降档时间 |
+| `operator_id` | INTEGER | FOREIGN KEY | 操作人ID |
+| `operator_role` | TEXT | NULL | 操作人角色 |
+| `original_type` | TEXT | NULL | 原始车型 |
+| `downgraded_type` | TEXT | NULL | 降档后车型 |
+| `original_volume` | REAL | NULL | 原始容积 |
+| `downgraded_volume` | REAL | NULL | 降档后容积 |
+| `downgrade_reason` | TEXT | NULL | 降档原因 |
 
 ## 4. 状态流转规则
 
@@ -166,28 +281,32 @@
 - **区域调度员**: 负责任务审核、派车管理
 - **车间地调**: 负责提交车辆需求、查看已分配的任务
 - **供应商**: 负责响应任务、填写车辆信息
+- **财务人员**: 负责财务对账，结算单生成等任务
 
 ### 5.2 角色权限矩阵
 
-| 功能模块 | 权限操作 | 超级管理员 | 区域调度员 | 车间地调 | 供应商 |
-|----------|----------|------------|------------|----------|--------|
-| 任务管理 | 创建任务 | ✅ | ✅ | ✅ | ❌ |
-| 任务管理 | 查看任务列表 | ✅ | ✅ | ✅ | ✅ |
-| 任务管理 | 查看任务详情 | ✅ | ✅ | ✅ | ✅ |
-| 任务管理 | 更新任务信息 | ✅ | ✅ | ✅ | ❌ |
-| 审核流程 | 提交审核 | ✅ | ✅ | ✅ | ❌ |
-| 审核流程 | 审核任务 | ✅ | ✅ | ❌ | ❌ |
-| 状态管理 | 更新任务状态 | ✅ | ✅ | ❌ | ❌ |
-| 状态管理 | 查看状态历史 | ✅ | ✅ | ✅ | ✅ |
-| 供应商响应 | 确认响应 | ❌ | ❌ | ❌ | ✅ |
-| 供应商响应 | 填写车辆信息 | ❌ | ❌ | ❌ | ✅ |
-| 公司管理 | 查看公司列表 | ✅ | ✅ | ✅ | ❌ |
-| 公司管理 | 添加公司 | ✅ | ✅ | ❌ | ❌ |
-| 公司管理 | 更新公司信息 | ✅ | ✅ | ❌ | ❌ |
-| 公司管理 | 删除公司 | ✅ | ✅ | ❌ | ❌ |
-| 车辆管理 | 查看车辆容积参考 | ✅ | ✅ | ✅ | ❌ |
-| 车辆管理 | 更新车辆容积参考 | ✅ | ✅ | ❌ | ❌ |
-| 车辆管理 | 添加车辆容积参考 | ✅ | ✅ | ❌ | ❌ |
-| 车辆管理 | 删除车辆容积参考 | ✅ | ✅ | ❌ | ❌ |
-| 车辆管理 | 批量导入车辆容积参考 | ✅ | ✅ | ❌ | ❌ |
-| 系统管理 | 用户管理 | ✅ | ❌ | ❌ | ❌ |
+| 功能模块 | 权限操作 | 超级管理员 | 区域调度员 | 车间地调 | 供应商 | 财务人员 |
+|----------|----------|------------|------------|----------|--------|----------|
+| 任务管理 | 创建任务 | ✅ | ✅ | ✅ | ❌ | ❌ |
+| 任务管理 | 查看任务列表 | ✅ | ✅ | ✅ | ✅ | ❌ |
+| 任务管理 | 查看任务详情 | ✅ | ✅ | ✅ | ✅ | ❌ |
+| 任务管理 | 更新任务信息 | ✅ | ✅ | ✅ | ❌ | ❌ |
+| 审核流程 | 提交审核 | ✅ | ✅ | ✅ | ❌ | ❌ |
+| 审核流程 | 审核任务 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 状态管理 | 更新任务状态 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 状态管理 | 查看状态历史 | ✅ | ✅ | ✅ | ✅ | ❌ |
+| 供应商响应 | 确认响应 | ❌ | ❌ | ❌ | ✅ | ❌ |
+| 供应商响应 | 填写车辆信息 | ❌ | ❌ | ❌ | ✅ | ❌ |
+| 公司管理 | 查看公司列表 | ✅ | ✅ | ✅ | ❌ | ❌ |
+| 公司管理 | 添加公司 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 公司管理 | 更新公司信息 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 公司管理 | 删除公司 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 车辆管理 | 查看车辆容积参考 | ✅ | ✅ | ✅ | ❌ | ❌ |
+| 车辆管理 | 更新车辆容积参考 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 车辆管理 | 添加车辆容积参考 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 车辆管理 | 删除车辆容积参考 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 车辆管理 | 批量导入车辆容积参考 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 系统管理 | 用户管理 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 财务管理 | 查看结算单 | ✅ | ✅ | ❌ | ❌ | ✅ |
+| 财务管理 | 生成结算单 | ✅ | ✅ | ❌ | ❌ | ✅ |
+| 财务管理 | 导出财务数据 | ✅ | ✅ | ❌ | ❌ | ✅ |

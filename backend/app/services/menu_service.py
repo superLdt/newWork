@@ -510,7 +510,7 @@ class MenuService:
             include_inactive: 是否包含未启用的菜单
 
         Returns:
-            list: 角色可访问的菜单树结构
+            list: 完整的菜单树结构，包含所有菜单
         """
         from ..models import Role, RolePermission
 
@@ -533,23 +533,23 @@ class MenuService:
         accessible_menu_ids = list(set([mp.menu_id for mp in menu_permissions]))
         current_app.logger.debug(f"Accessible menu IDs: {accessible_menu_ids}")
 
-        # 获取所有菜单
+        # 获取所有菜单（返回完整菜单树，不过滤）
         all_menus = MenuService.get_all_menus(include_inactive)
         current_app.logger.debug(f"Total menus fetched: {len(all_menus)}")
 
-        # 过滤菜单，只保留与角色权限关联的菜单及其所有祖先菜单
-        filtered_menus = set()
-        for menu in all_menus:
-            if menu.id in accessible_menu_ids:
-                filtered_menus.add(menu)
-                # 添加所有祖先菜单
-                ancestors = menu.get_ancestors()
-                filtered_menus.update(ancestors)
-        current_app.logger.debug(f"Filtered menus count: {len(filtered_menus)}")
-
-        # 构建菜单树
-        menu_tree = Menu.build_menu_tree(list(filtered_menus))
-        current_app.logger.debug(f"Menu tree built. Root nodes count: {len(menu_tree)}")
+        # 构建完整菜单树
+        menu_tree = Menu.build_menu_tree(all_menus)
+        
+        # 在返回的树中标记有权限的菜单ID
+        def mark_permissions_in_tree(menus, accessible_ids):
+            """递归标记菜单权限状态"""
+            for menu in menus:
+                menu['has_permission'] = menu['id'] in accessible_ids
+                if menu.get('children'):
+                    mark_permissions_in_tree(menu['children'], accessible_ids)
+        
+        mark_permissions_in_tree(menu_tree, accessible_menu_ids)
+        current_app.logger.debug(f"Menu tree built with permissions. Root nodes count: {len(menu_tree)}")
         return menu_tree
 
     @staticmethod

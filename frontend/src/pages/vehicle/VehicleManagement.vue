@@ -132,7 +132,7 @@
 
 <script>
 import VolumeForm from './components/VolumeForm.vue';
-import { getVehicleList, addVehicle, updateVehicle, deleteVehicle } from '@/api/vehicle';
+import { getVehicleList, addVehicle, updateVehicle, deleteVehicle } from '@/services/vehicleService';
 import permission from '@/directives/permission';
 
 export default {

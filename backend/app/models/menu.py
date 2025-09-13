@@ -189,7 +189,8 @@ class Menu(db.Model):
             # 调度管理子菜单
             {'name': '运输订单', 'code': 'transport_orders', 'path': '/dispatch/orders', 'component': 'pages/dispatch/TransportOrders', 'icon': 'el-icon-document', 'parent_code': 'dispatch', 'sort_order': 1},
             {'name': '调度任务', 'code': 'dispatch_tasks', 'path': '/dispatch/tasks', 'component': 'pages/dispatch/DispatchTasks', 'icon': 'el-icon-coordinate', 'parent_code': 'dispatch', 'sort_order': 2},
-            {'name': '运输跟踪', 'code': 'transport_tracking', 'path': '/dispatch/tracking', 'component': 'pages/dispatch/TransportTracking', 'icon': 'el-icon-location', 'parent_code': 'dispatch', 'sort_order': 3},
+            {'name': '调度仪表盘', 'code': 'dispatch_dashboard', 'path': '/dispatch/dashboard', 'component': 'pages/dispatch/DispatchDashboard', 'icon': 'el-icon-data-analysis', 'parent_code': 'dispatch', 'sort_order': 3},
+            {'name': '运输跟踪', 'code': 'transport_tracking', 'path': '/dispatch/tracking', 'component': 'pages/dispatch/TransportTracking', 'icon': 'el-icon-location', 'parent_code': 'dispatch', 'sort_order': 4},
             
             # 系统设置子菜单
             {'name': '用户管理', 'code': 'user_management', 'path': '/settings/users', 'component': 'pages/settings/UserManagement', 'icon': 'el-icon-user', 'parent_code': 'settings', 'sort_order': 1},

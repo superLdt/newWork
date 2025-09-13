@@ -29,6 +29,7 @@
           :filter-node-method="filterNode"
           :default-checked-keys="selectedPermissions"
           class="permission-tree"
+          :empty-text="'暂无权限数据'"
         >
           <template #default="{ node, data }">
             <span class="custom-tree-node">
@@ -61,7 +62,7 @@ export default {
   data() {
     return {
       loading: false,
-      permissions: [],
+      permissions: [], // 确保初始化为空数组
       selectedPermissions: [],
       filterText: '',
       defaultProps: {
@@ -75,7 +76,19 @@ export default {
       // 将权限按模块分组
       const groups = {}
       
+      // 确保 permissions 是数组
+      if (!Array.isArray(this.permissions)) {
+        console.error('permissions 不是数组:', this.permissions)
+        return []
+      }
+      
       this.permissions.forEach(permission => {
+        // 确保 permission 对象有效
+        if (!permission || !permission.code) {
+          console.warn('无效的权限对象:', permission)
+          return
+        }
+        
         const [module] = permission.code.split(':')
         if (!groups[module]) {
           groups[module] = {
@@ -110,24 +123,69 @@ export default {
   methods: {
     async loadPermissions() {
       this.loading = true
+      // 确保初始化为空数组
+      this.permissions = []
+      this.selectedPermissions = []
+      
       try {
-        // 获取所有权限
-        const allPermissionsResponse = await apiService.permissions.getPermissions()
+        // 获取所有权限（显式请求大页尺寸，避免分页导致空数据）
+        const allPermissionsResponse = await apiService.permissions.getPermissions({ page: 1, per_page: 1000 })
+        console.log('所有权限响应:', allPermissionsResponse)
         if (allPermissionsResponse.code === 200) {
-          this.permissions = allPermissionsResponse.data
+          // 确保数据是数组
+          if (allPermissionsResponse.data && Array.isArray(allPermissionsResponse.data)) {
+            this.permissions = allPermissionsResponse.data
+          } else if (allPermissionsResponse.data && Array.isArray(allPermissionsResponse.data.items)) {
+            // 处理分页结构 { items: [], total: n }
+            this.permissions = allPermissionsResponse.data.items
+          } else if (allPermissionsResponse.data && Array.isArray(allPermissionsResponse.data.permissions)) {
+            // 处理嵌套结构 { permissions: [] }
+            this.permissions = allPermissionsResponse.data.permissions
+          } else {
+            this.permissions = []
+          }
+          console.log('处理后的所有权限:', this.permissions, '数量:', this.permissions.length)
         } else {
           ElMessage.error('获取权限列表失败')
         }
         
         // 获取角色已有权限
         const rolePermissionsResponse = await apiService.roles.getRolePermissions(this.role.id)
-        if (rolePermissionsResponse.code === 200) {
-          this.selectedPermissions = rolePermissionsResponse.data.map(p => p.id)
+        if (rolePermissionsResponse.code === 200 && rolePermissionsResponse.data) {
+          // 处理嵌套数据结构
+          console.log('角色权限响应数据:', rolePermissionsResponse.data)
+          
+          // 检查数据结构中是否包含permissions字段
+          let permissionsData = []
+          if (Array.isArray(rolePermissionsResponse.data.permissions)) {
+            permissionsData = rolePermissionsResponse.data.permissions
+          } else if (Array.isArray(rolePermissionsResponse.data)) {
+            // 尝试直接使用data，如果它是数组
+            permissionsData = rolePermissionsResponse.data
+          }
+          console.log('角色已有权限数据:', permissionsData)
+          this.selectedPermissions = permissionsData.map(p => p.id)
+
+          // 如果所有权限为空，但角色权限不为空，则回退使用角色权限以避免树显示“暂无数据”
+          if (this.permissions.length === 0 && permissionsData.length > 0) {
+            console.warn('所有权限列表为空，使用角色已有权限作为显示数据（临时回退）')
+            this.permissions = permissionsData
+          }
         } else {
           ElMessage.error('获取角色权限失败')
         }
+
+        // 等下一个tick，确保树节点已渲染后再设置勾选状态
+        this.$nextTick(() => {
+          try {
+            this.$refs.permissionTree && this.$refs.permissionTree.setCheckedKeys(this.selectedPermissions)
+          } catch (e) {
+            console.warn('设置树勾选状态失败:', e)
+          }
+        })
       } catch (error) {
-        ElMessage.error('加载权限数据失败: ' + error.message)
+        console.error('加载权限数据失败:', error)
+        ElMessage.error('加载权限数据失败: ' + (error.message || '未知错误'))
       } finally {
         this.loading = false
       }
@@ -138,13 +196,14 @@ export default {
         const selectedPermissionIds = this.$refs.permissionTree.getCheckedKeys()
           .filter(id => !id.toString().startsWith('group_')) // 过滤掉分组ID
         
+        // 使用已存在的 API 方法以匹配后端路由 (PUT /role-permissions/roles/:id/permissions)
         const response = await apiService.roles.updateRolePermissions(
-          this.role.id, 
+          this.role.id,
           { permission_ids: selectedPermissionIds }
         )
         
         if (response.code === 200) {
-          ElMessage.success('权限更新成功')
+          // 由父组件统一展示成功提示，子组件不再弹出成功消息
           this.$emit('saved')
         } else {
           ElMessage.error(response.message || '权限更新失败')
