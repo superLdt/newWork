@@ -144,7 +144,7 @@ export const apiService = {
   basicData: {
     // 获取车辆列表
     getVehicles: () => {
-      return api.get('/basic_data/vehicles')
+      return api.get('/vehicles')
     },
     
     // 获取司机列表
@@ -152,9 +152,9 @@ export const apiService = {
       return api.get('/basic_data/drivers')
     },
     
-    // 获取客户列表
-    getCustomers: () => {
-      return api.get('/basic_data/customers')
+    // 获取派车单位列表
+    getDispatchUnits: (params) => {
+      return api.get('/dispatch-units', { params })
     }
   },
   

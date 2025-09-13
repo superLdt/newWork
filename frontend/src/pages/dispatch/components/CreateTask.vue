@@ -6,7 +6,8 @@
           v-model="taskForm.required_date"
           type="date"
           placeholder="选择日期"
-          format="yyyy-MM-DD"
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
           style="width: 100%"
         ></el-date-picker>
       </el-form-item>
@@ -138,7 +139,6 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePermissionStore } from '@/stores/permission'
-import dayjs from 'dayjs'
 
 export default {
   name: 'CreateTask',
@@ -169,7 +169,7 @@ export default {
     
     // 表单数据
     const taskForm = reactive({
-      required_date: new Date(), // 使用 Date 类型，避免字符串解析问题
+      required_date: null,
       origin_bureau: '',
       mail_route_name: '',
       organizing_unit: '',
@@ -334,10 +334,24 @@ export default {
       await taskFormRef.value.validate(async (valid) => {
         if (valid) {
           try {
+            // 模拟API调用，实际项目中应替换为真实API
+            // const response = await fetch('/api/dispatch/tasks', {
+            //   method: 'POST',
+            //   headers: {
+            //     'Content-Type': 'application/json'
+            //   },
+            //   body: JSON.stringify(taskForm)
+            // })
+            // 
+            // if (!response.ok) {
+            //   throw new Error('创建派车任务失败')
+            // }
+            // 
+            // const data = await response.json()
+            
             ElMessage.success('派车任务创建成功')
             emit('create-success', {
               ...taskForm,
-              required_date: taskForm.required_date ? dayjs(taskForm.required_date).format('yyyy-MM-DD') : '',
               task_id: 'TASK' + Date.now().toString().slice(-6) // 模拟生成任务ID
             })
           } catch (error) {
@@ -354,8 +368,6 @@ export default {
     const resetForm = () => {
       if (taskFormRef.value) {
         taskFormRef.value.resetFields()
-        // 复位日期为当前日期，确保控件显示正常
-        taskForm.required_date = new Date()
       }
     }
     
@@ -390,6 +402,7 @@ export default {
       taskForm,
       rules,
       bureauOptions,
+      directionOptions,
       companyOptions,
       routeOptions,
       transportTypeOptions,

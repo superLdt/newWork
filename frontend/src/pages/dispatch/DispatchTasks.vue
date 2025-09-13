@@ -13,12 +13,18 @@
         <el-form :inline="true" :model="filterForm" class="demo-form-inline">
           <el-form-item label="任务状态">
             <el-select v-model="filterForm.status" placeholder="选择状态" clearable>
-              <el-option label="待审核" value="pending"></el-option>
-              <el-option label="已审核" value="approved"></el-option>
-              <el-option label="已分配" value="assigned"></el-option>
-              <el-option label="进行中" value="in_progress"></el-option>
-              <el-option label="已完成" value="completed"></el-option>
-              <el-option label="已取消" value="cancelled"></el-option>
+              <el-option label="待审核" value="待审核"></el-option>
+              <el-option label="审核通过" value="审核通过"></el-option>
+              <el-option label="待响应" value="待响应"></el-option>
+              <el-option label="已响应" value="已响应"></el-option>
+              <el-option label="任务完成" value="任务完成"></el-option>
+              <el-option label="审核拒绝" value="审核拒绝"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="业务类型">
+            <el-select v-model="filterForm.business_type" placeholder="选择业务类型" clearable>
+              <el-option label="委办派车" value="委办派车"></el-option>
+              <el-option label="自办派车" value="自办派车"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item label="关键词">
@@ -39,11 +45,16 @@
         border
       >
         <el-table-column type="index" label="序号" width="60"></el-table-column>
-        <el-table-column prop="task_id" label="任务ID" width="180"></el-table-column>
+        <el-table-column prop="task_id" label="任务ID" width="160"></el-table-column>
+        <el-table-column prop="business_type" label="业务类型" width="100">
+          <template #default="scope">
+            <el-tag :type="scope.row.business_type === '自办派车' ? 'success' : 'primary'">{{ scope.row.business_type }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="required_date" label="需求日期" width="120"></el-table-column>
-        <el-table-column prop="origin_bureau" label="始发局" width="150"></el-table-column>
+        <el-table-column prop="origin_bureau" label="始发局" width="120"></el-table-column>
         <el-table-column prop="mail_route_name" label="邮路名称"></el-table-column>
-        <el-table-column prop="transport_type" label="运输类型" width="120"></el-table-column>
+        <el-table-column prop="transport_type" label="运输类型" width="100"></el-table-column>
         <el-table-column label="优先级" width="100">
           <template #default="scope">
             <el-tag :type="getPriorityType(scope.row.required_date)">{{ getPriorityText(scope.row.required_date) }}</el-tag>
@@ -60,15 +71,21 @@
             <el-button 
               size="small" 
               type="primary" 
-              v-if="scope.row.status === 'pending' && hasPermission('dispatch:approve')"
+              v-if="scope.row.status === '待审核' && hasPermission('dispatch:approve')"
               @click="openApproveDialog(scope.row)"
             >审核</el-button>
             <el-button 
               size="small" 
               type="success" 
-              v-if="scope.row.status === 'approved' && hasPermission('dispatch:assign')"
+              v-if="false && hasPermission('dispatch:assign')"
               @click="openAssignVehicleDialog(scope.row)"
             >分配车辆</el-button>
+            <el-button 
+              size="small" 
+              type="warning" 
+              v-if="scope.row.status === '待响应' && hasPermission('dispatch:assign')"
+              @click="openAssignVehicleDialog(scope.row)"
+            >{{ scope.row.business_type === '自办派车' ? '内部响应' : '供应商响应' }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -130,7 +147,7 @@
     <!-- 分配车辆对话框 -->
     <el-dialog
       v-model="assignVehicleDialogVisible"
-      title="分配车辆"
+      :title="currentTask ? (currentTask.business_type === '自办派车' ? '内部响应' : '供应商响应') : '分配车辆'"
       width="60%"
     >
       <assign-vehicle-form 
@@ -181,6 +198,7 @@ export default {
     // 过滤表单
     const filterForm = reactive({
       status: '',
+      business_type: '',
       query: ''
     })
     

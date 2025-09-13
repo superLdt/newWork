@@ -2,6 +2,7 @@ from app.models.vehicle.vehicle import Vehicle
 from app.models.vehicle.vehicle_capacity_reference import VehicleCapacityReference
 from app.models.vehicle.vehicle_volume_history import VehicleVolumeHistory
 from app.models.user import User
+from app.services.vehicle.vehicle_business_service import VehicleBusinessService
 from app.extensions import db
 from datetime import datetime
 from sqlalchemy.exc import SQLAlchemyError
@@ -47,7 +48,7 @@ class VehicleService:
             total = pagination.total
             
             # 转换为字典列表
-            vehicle_list = [vehicle.to_dict() for vehicle in vehicles]
+            vehicle_list = [VehicleBusinessService.vehicle_to_dict(vehicle) for vehicle in vehicles]
             
             return vehicle_list, total
         except SQLAlchemyError as e:
@@ -69,7 +70,7 @@ class VehicleService:
             vehicle = Vehicle.query.get(vehicle_id)
             if not vehicle:
                 return None
-            return vehicle.to_dict()
+            return VehicleBusinessService.vehicle_to_dict(vehicle)
         except SQLAlchemyError as e:
             logger.error(f"获取车辆信息失败: {str(e)}")
             raise
@@ -86,6 +87,11 @@ class VehicleService:
             Dict: 创建的车辆信息
         """
         try:
+            # 使用业务服务层验证数据
+            is_valid, result = VehicleBusinessService.validate_and_prepare_vehicle(vehicle_data)
+            if not is_valid:
+                raise ValueError('; '.join(result))
+
             vehicle = Vehicle(
                 task_id=vehicle_data.get('task_id'),
                 manifest_number=vehicle_data.get('manifest_number'),
@@ -98,13 +104,20 @@ class VehicleService:
                 volume_photo_url=vehicle_data.get('volume_photo_url'),
                 volume_modified_by=vehicle_data.get('volume_modified_by'),
                 required_volume=vehicle_data.get('required_volume'),
-                confirmed_volume=vehicle_data.get('confirmed_volume')
+                confirmed_volume=vehicle_data.get('confirmed_volume'),
+                vehicle_type=vehicle_data.get('vehicle_type'),
+                vehicle_category=vehicle_data.get('vehicle_category'),
+                frequent_companies=vehicle_data.get('frequent_companies', '[]'),
+                supplier_id=vehicle_data.get('supplier_id'),
+                supplier_type=vehicle_data.get('supplier_type'),
+                status=vehicle_data.get('status', '待确认'),
+                original_capacity=vehicle_data.get('original_capacity')
             )
             
             db.session.add(vehicle)
             db.session.commit()
             
-            return vehicle.to_dict()
+            return VehicleBusinessService.vehicle_to_dict(vehicle)
         except SQLAlchemyError as e:
             db.session.rollback()
             logger.error(f"创建车辆失败: {str(e)}")
@@ -127,6 +140,11 @@ class VehicleService:
             if not vehicle:
                 return None
             
+            # 使用业务服务层验证数据
+            is_valid, result = VehicleBusinessService.validate_and_prepare_vehicle(vehicle_data)
+            if not is_valid:
+                raise ValueError('; '.join(result))
+
             # 更新车辆信息
             for key, value in vehicle_data.items():
                 if hasattr(vehicle, key) and key != 'id':
@@ -134,7 +152,7 @@ class VehicleService:
             
             db.session.commit()
             
-            return vehicle.to_dict()
+            return VehicleBusinessService.vehicle_to_dict(vehicle)
         except SQLAlchemyError as e:
             db.session.rollback()
             logger.error(f"更新车辆信息失败: {str(e)}")
@@ -227,7 +245,7 @@ class VehicleService:
             return {
                 'success': True,
                 'message': '车辆容积更新成功',
-                'vehicle': vehicle.to_dict(),
+                'vehicle': VehicleBusinessService.vehicle_to_dict(vehicle),
                 'history': history.to_dict(),
                 'modifier': username
             }
@@ -269,6 +287,28 @@ class VehicleService:
             return history_list, total
         except SQLAlchemyError as e:
             logger.error(f"获取容积更新历史失败: {str(e)}")
+            raise
+    
+    @staticmethod
+    def get_available_vehicles() -> List[Dict]:
+        """
+        获取可用车辆列表
+        
+        Returns:
+            List[Dict]: 可用车辆列表
+        """
+        try:
+            # 查询状态为可用的车辆
+            vehicles = Vehicle.query.filter(
+                Vehicle.status.in_(['待确认', '可用', '空闲'])
+            ).all()
+            
+            # 转换为字典列表
+            vehicle_list = [VehicleBusinessService.vehicle_to_dict(vehicle) for vehicle in vehicles]
+            
+            return vehicle_list
+        except SQLAlchemyError as e:
+            logger.error(f"获取可用车辆列表失败: {str(e)}")
             raise
     
     @staticmethod

@@ -20,6 +20,9 @@ dispatch_bp.route('/tasks/<string:task_id>', methods=['PUT'])(DispatchController
 # 审核派车任务路由
 dispatch_bp.route('/tasks/<string:task_id>/approve', methods=['POST'])(DispatchController.approve_dispatch_task)
 
+# 审核派车任务路由（兼容audit接口）
+dispatch_bp.route('/tasks/<string:task_id>/audit', methods=['POST'])(DispatchController.approve_dispatch_task)
+
 # 分配车辆路由
 dispatch_bp.route('/tasks/<string:task_id>/assign', methods=['POST'])(DispatchController.assign_vehicle)
 

@@ -299,25 +299,62 @@ export default {
     const currentUserRole = computed(() => {
       const userInfo = permissionStore.userInfo
       if (userInfo && userInfo.roles && userInfo.roles.length > 0) {
-        return userInfo.roles[0].name || 'regional_dispatcher'
+        // 兼容两种格式：字符串数组和对象数组
+        const firstRole = userInfo.roles[0]
+        if (typeof firstRole === 'string') {
+          return firstRole
+        } else if (firstRole && firstRole.name) {
+          return firstRole.name
+        }
+      }
+      // 也检查permissionStore.roles（字符串数组）
+      if (permissionStore.roles && permissionStore.roles.length > 0) {
+        return permissionStore.roles[0]
       }
       return 'regional_dispatcher' // 默认角色
     })
 
-    // 角色权限映射
+    // 角色权限映射（根据业务流程图更新）
     const roleActionMap = {
+      // 超级管理员 - 可以审核车间地调发起的任务
+      '超级管理员': [
+        { key: 'approve', label: '审批通过', type: 'primary', icon: Check, status: ['pending'] },
+        { key: 'reject', label: '拒绝', type: 'danger', icon: Close, status: ['pending'] }
+      ],
+      // 区域调度员 - 可以审核车间地调发起的任务
+      '区域调度员': [
+        { key: 'approve', label: '审批通过', type: 'primary', icon: Check, status: ['pending'] },
+        { key: 'reject', label: '拒绝', type: 'danger', icon: Close, status: ['pending'] }
+      ],
+      // 车间地调 - 发起任务后等待审核，最后确认发车
+      '车间地调': [
+        { key: 'depart_confirm', label: '发车确认', type: 'primary', icon: Promotion, status: ['final_confirmed'] }
+      ],
+      // 供应商 - 响应委办任务
+      '供应商': [
+        { key: 'respond', label: '响应接单', type: 'success', icon: Position, status: ['awaiting_supplier_response'] }
+      ],
+      // 班组长 - 处理自办车辆任务
+      '班组长': [
+        { key: 'team_assign', label: '班组派车', type: 'warning', icon: CircleCheck, status: ['awaiting_team_assignment'] }
+      ],
+      // 外包管理公司 - 处理大容积自办车辆任务
+      '外包管理公司': [
+        { key: 'outsourcing_assign', label: '外包派车', type: 'success', icon: Select, status: ['awaiting_team_assignment'] }
+      ],
+      // 兼容旧的英文角色名
       regional_dispatcher: [
         { key: 'approve', label: '审批通过', type: 'primary', icon: Check, status: ['pending'] },
         { key: 'reject', label: '拒绝', type: 'danger', icon: Close, status: ['pending'] }
       ],
       supplier: [
-        { key: 'respond', label: '响应接单', type: 'success', icon: Position, status: ['approved'] }
+        { key: 'respond', label: '响应接单', type: 'success', icon: Position, status: ['awaiting_supplier_response'] }
       ],
       team_leader: [
-        { key: 'confirm', label: '确认接单', type: 'warning', icon: CircleCheck, status: ['assigned'] }
+        { key: 'team_assign', label: '班组派车', type: 'warning', icon: CircleCheck, status: ['awaiting_team_assignment'] }
       ],
       outsourcing_manager: [
-        { key: 'final_confirm', label: '最终确认', type: 'success', icon: Select, status: ['confirmed'] }
+        { key: 'outsourcing_assign', label: '外包派车', type: 'success', icon: Select, status: ['awaiting_team_assignment'] }
       ],
       workshop_dispatcher: [
         { key: 'depart_confirm', label: '发车确认', type: 'primary', icon: Promotion, status: ['final_confirmed'] }
@@ -332,17 +369,22 @@ export default {
 
     const hasAvailableActions = computed(() => availableActions.value.length > 0)
 
-    // 状态文本映射
+    // 状态文本映射（根据业务流程图更新）
     const statusTextMap = {
       pending: '待审核',
       approved: '已审批',
       rejected: '已拒绝',
+      awaiting_supplier_response: '待供应商响应',
+      awaiting_team_assignment: '待班组派车',
+      supplier_responded: '供应商已响应',
+      team_assigned: '班组已派车',
       assigned: '已分配',
       confirmed: '已确认',
       final_confirmed: '最终确认',
       departed: '已发车',
       completed: '已完成',
-      cancelled: '已取消'
+      cancelled: '已取消',
+      in_progress: '进行中'
     }
 
     // 状态提示样式
@@ -351,12 +393,17 @@ export default {
         pending: 'status-pending',
         approved: 'status-approved',
         rejected: 'status-rejected',
+        awaiting_supplier_response: 'status-awaiting',
+        awaiting_team_assignment: 'status-awaiting',
+        supplier_responded: 'status-responded',
+        team_assigned: 'status-assigned',
         assigned: 'status-assigned',
         confirmed: 'status-confirmed',
         final_confirmed: 'status-final-confirmed',
         departed: 'status-departed',
         completed: 'status-completed',
-        cancelled: 'status-cancelled'
+        cancelled: 'status-cancelled',
+        in_progress: 'status-in-progress'
       }
       return classMap[status] || 'status-info'
     }
@@ -366,29 +413,77 @@ export default {
       return statusTextMap[status] || status
     }
 
-    // 获取下一步操作提示
+    // 获取下一步操作提示（根据业务流程图更新）
     const getNextActionHint = (status, role) => {
       const hintMap = {
         pending: {
+          '超级管理员': '请审核此任务',
+          '区域调度员': '请审核此任务',
+          '车间地调': '等待超级管理员或区域调度员审核',
+          '供应商': '等待审核',
+          '班组长': '等待审核',
+          '外包管理公司': '等待审核',
           regional_dispatcher: '请审核此任务',
           supplier: '等待区域调度员审核',
           team_leader: '等待区域调度员审核',
           outsourcing_manager: '等待区域调度员审核',
           workshop_dispatcher: '等待区域调度员审核'
         },
-        approved: {
-          regional_dispatcher: '任务已审批，等待供应商响应',
+        awaiting_supplier_response: {
+          '超级管理员': '等待供应商响应',
+          '区域调度员': '等待供应商响应',
+          '车间地调': '等待供应商响应',
+          '供应商': '请响应此委办任务',
+          '班组长': '等待供应商响应',
+          '外包管理公司': '等待供应商响应',
+          regional_dispatcher: '等待供应商响应',
           supplier: '请响应此任务',
           team_leader: '等待供应商响应',
           outsourcing_manager: '等待供应商响应',
           workshop_dispatcher: '等待供应商响应'
         },
+        awaiting_team_assignment: {
+          '超级管理员': '等待班组或外包公司派车',
+          '区域调度员': '等待班组或外包公司派车',
+          '车间地调': '等待班组或外包公司派车',
+          '供应商': '等待班组或外包公司派车',
+          '班组长': '请派遣自办车辆',
+          '外包管理公司': '请派遣外包车辆',
+          regional_dispatcher: '等待班组派车',
+          supplier: '等待班组派车',
+          team_leader: '请派遣车辆',
+          outsourcing_manager: '请派遣车辆',
+          workshop_dispatcher: '等待班组派车'
+        },
+        supplier_responded: {
+          '超级管理员': '供应商已响应，等待进一步处理',
+          '区域调度员': '供应商已响应，等待进一步处理',
+          '车间地调': '供应商已响应，等待进一步处理',
+          '供应商': '已响应任务',
+          '班组长': '供应商已响应',
+          '外包管理公司': '供应商已响应'
+        },
+        team_assigned: {
+          '超级管理员': '班组已派车，等待进一步处理',
+          '区域调度员': '班组已派车，等待进一步处理',
+          '车间地调': '班组已派车，等待进一步处理',
+          '供应商': '班组已派车',
+          '班组长': '已派遣车辆',
+          '外包管理公司': '班组已派车'
+        },
+        approved: {
+          regional_dispatcher: '任务已审批，等待响应',
+          supplier: '请响应此任务',
+          team_leader: '等待响应',
+          outsourcing_manager: '等待响应',
+          workshop_dispatcher: '等待响应'
+        },
         assigned: {
-          regional_dispatcher: '任务已分配，等待班组长确认',
-          supplier: '任务已分配，等待班组长确认',
+          regional_dispatcher: '任务已分配，等待确认',
+          supplier: '任务已分配，等待确认',
           team_leader: '请确认此任务',
-          outsourcing_manager: '等待班组长确认',
-          workshop_dispatcher: '等待班组长确认'
+          outsourcing_manager: '等待确认',
+          workshop_dispatcher: '等待确认'
         },
         confirmed: {
           regional_dispatcher: '任务已确认，等待最终确认',
@@ -398,12 +493,19 @@ export default {
           workshop_dispatcher: '等待最终确认'
         },
         final_confirmed: {
+          '超级管理员': '任务已最终确认，等待发车',
+          '区域调度员': '任务已最终确认，等待发车',
+          '车间地调': '请确认发车',
+          '供应商': '任务已最终确认，等待发车',
+          '班组长': '任务已最终确认，等待发车',
+          '外包管理公司': '任务已最终确认，等待发车',
           regional_dispatcher: '任务已最终确认，等待发车',
           supplier: '任务已最终确认，等待发车',
           team_leader: '任务已最终确认，等待发车',
           outsourcing_manager: '任务已最终确认，等待发车',
           workshop_dispatcher: '请确认发车'
         },
+        in_progress: '任务进行中',
         departed: '任务已发车',
         completed: '任务已完成',
         rejected: '任务已被拒绝',

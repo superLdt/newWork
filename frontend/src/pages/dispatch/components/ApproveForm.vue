@@ -38,7 +38,6 @@
 <script>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { dispatchService } from '@/services/dispatchService'
 
 export default {
   name: 'ApproveForm',
@@ -80,18 +79,12 @@ export default {
       
       await formRef.value.validate(async (valid, fields) => {
         if (valid) {
-          try {
-            // 使用dispatchService审核任务
-            const result = await dispatchService.auditTask(formData.task_id, {
-              result: formData.result,
-              comment: formData.comment
-            })
-            ElMessage.success('审核任务成功')
-            emit('submit', result)
-          } catch (error) {
-            console.error('审核任务失败:', error)
-            ElMessage.error(error.message || '审核任务失败')
+          // 只进行表单验证，将数据传递给父组件处理
+          const approveData = {
+            approved: formData.result === 'approved',
+            comment: formData.comment
           }
+          emit('submit', approveData)
         } else {
           console.log('表单验证失败', fields)
         }

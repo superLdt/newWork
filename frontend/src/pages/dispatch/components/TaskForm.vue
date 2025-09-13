@@ -7,6 +7,18 @@
       label-width="120px"
       label-position="right"
     >
+      <!-- 业务类型选择 -->
+      <el-form-item label="业务类型" prop="business_type">
+        <el-radio-group v-model="formData.business_type" @change="handleBusinessTypeChange">
+          <el-radio-button label="委办派车">委办派车</el-radio-button>
+          <el-radio-button label="自办派车">自办派车</el-radio-button>
+        </el-radio-group>
+        <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+          <span v-if="formData.business_type === '委办派车'">委托外部供应商提供车辆和司机服务</span>
+          <span v-if="formData.business_type === '自办派车'">使用自有车辆和司机执行运输任务</span>
+        </div>
+      </el-form-item>
+      
       <el-form-item label="需求日期" prop="required_date">
         <el-date-picker
           v-model="formData.required_date"
@@ -167,6 +179,7 @@ export default {
     
     // 表单数据
     const formData = reactive({
+      business_type: props.task?.business_type || '委办派车',
       required_date: normalizeRequiredDate(props.task?.required_date),
       origin_bureau: props.task?.origin_bureau || '',
       mail_route_name: props.task?.mail_route_name || '',
@@ -198,6 +211,19 @@ export default {
      watch(() => formData.standard_weight, (newWeight) => {
        handleWeightChange(newWeight)
      })
+     
+     // 业务类型变化处理
+     const handleBusinessTypeChange = (value) => {
+       console.log('业务类型变更为:', value)
+       // 根据业务类型调整其他字段的默认值或显示逻辑
+       if (value === '自办派车') {
+         // 自办派车的特殊处理逻辑
+         formData.organizing_unit = formData.organizing_unit || '自办车队'
+       } else {
+         // 委办派车的特殊处理逻辑
+         formData.organizing_unit = formData.organizing_unit || ''
+       }
+     }
 
     // 根据角色自动设置审核需求
     const setAuditRequiredByRole = () => {
@@ -216,6 +242,9 @@ export default {
     
     // 表单验证规则
     const rules = {
+      business_type: [
+        { required: true, message: '请选择业务类型', trigger: 'change' }
+      ],
       required_date: [
         { required: true, message: '请选择需求日期', trigger: 'change' }
       ],
@@ -297,7 +326,8 @@ export default {
        submitForm,
        cancel,
        actualVolumeDisabled,
-       handleWeightChange
+       handleWeightChange,
+       handleBusinessTypeChange
      }
   }
 }

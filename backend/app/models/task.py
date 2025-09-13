@@ -36,6 +36,7 @@ class ManualDispatchTask(db.Model):
     created_at = db.Column(db.String(20), default=lambda: datetime.now().strftime('%Y-%m-%d %H:%M:%S'), comment='创建时间')
     updated_at = db.Column(db.String(20), default=lambda: datetime.now().strftime('%Y-%m-%d %H:%M:%S'), onupdate=lambda: datetime.now().strftime('%Y-%m-%d %H:%M:%S'), comment='更新时间')
     assigned_supplier_id = db.Column(db.Integer, comment='分配供应商ID')
+    business_type = db.Column(db.String(20), default='委办派车', comment='业务类型：自办派车/委办派车')
     
     # 关系定义
     vehicles = db.relationship('Vehicle', backref='task', lazy=True, cascade='all, delete-orphan')
@@ -78,6 +79,7 @@ class ManualDispatchTask(db.Model):
             'created_at': self.created_at,
             'updated_at': self.updated_at,
             'assigned_supplier_id': self.assigned_supplier_id,
+            'business_type': self.business_type,
             'vehicles': [vehicle.to_dict() for vehicle in self.vehicles] if self.vehicles else [],
             'status_history': [history.to_dict() for history in self.status_history] if self.status_history else []
         }
@@ -90,8 +92,8 @@ class ManualDispatchTask(db.Model):
             list: 状态选项列表
         """
         return [
-            '待审核', '审核通过', '待供应商响应', 
-            '供应商已响应', '任务完成', '审核拒绝'
+            '待审核', '审核通过', '待响应', 
+            '已响应', '任务完成', '审核拒绝'
         ]
     
     @classmethod
@@ -146,3 +148,12 @@ class ManualDispatchTask(db.Model):
             list: 需求类型选项列表
         """
         return ['正班', '加班']
+    
+    @classmethod
+    def get_business_type_options(cls):
+        """
+        获取业务类型选项列表
+        Returns:
+            list: 业务类型选项列表
+        """
+        return ['自办派车', '委办派车']

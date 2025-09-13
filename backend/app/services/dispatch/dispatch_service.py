@@ -173,6 +173,7 @@ class DispatchService:
                 initiator_department=task_data.get('initiator_department'),
                 audit_required=audit_required,
                 current_handler_role=current_handler_role,
+                business_type=task_data.get('business_type', '委办派车'),
                 created_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 updated_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             )

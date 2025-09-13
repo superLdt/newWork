@@ -1,5 +1,8 @@
 from datetime import datetime
+import json
+import re
 from app.extensions import db
+from sqlalchemy.orm import validates
 
 
 class Vehicle(db.Model):
@@ -23,11 +26,8 @@ class Vehicle(db.Model):
     required_volume = db.Column(db.Float, comment='需求容积')
     confirmed_volume = db.Column(db.Float, comment='确认容积')
     vehicle_type = db.Column(db.String(20), comment='车辆类型')
-    supplier_id = db.Column(db.Integer, db.ForeignKey('Company.id'), comment='供应商ID')
+    supplier_id = db.Column(db.Integer, db.ForeignKey('dispatch_units.id'), comment='供应商ID')
     supplier_type = db.Column(db.String(50), comment='供应商类型')
-    driver_name = db.Column(db.String(50), comment='司机姓名')
-    driver_phone = db.Column(db.String(20), comment='司机电话')
-    driver_id_card = db.Column(db.String(20), comment='司机身份证号')
     status = db.Column(db.String(20), default='待确认', comment='车辆状态')
     confirmed_by = db.Column(db.Integer, comment='确认人ID')
     confirmed_at = db.Column(db.String(20), comment='确认时间')
@@ -36,40 +36,9 @@ class Vehicle(db.Model):
     original_capacity = db.Column(db.Float, comment='原始容积')
     updated_at = db.Column(db.String(20), default=lambda: datetime.now().strftime('%Y-%m-%d %H:%M:%S'), onupdate=lambda: datetime.now().strftime('%Y-%m-%d %H:%M:%S'), comment='更新时间')
     
+    # 新增字段
+    vehicle_category = db.Column(db.String(10), comment='车辆分类：单车/挂车')
+    frequent_companies = db.Column(db.Text, default='[]', comment='常用公司列表，JSON格式')
+    
     def __repr__(self):
         return f'<Vehicle {self.license_plate}: {self.manifest_number}>'
-    
-    def to_dict(self):
-        """
-        将车辆对象转换为字典格式
-        Returns:
-            dict: 包含车辆信息的字典
-        """
-        return {
-            'id': self.id,
-            'task_id': self.task_id,
-            'manifest_number': self.manifest_number,
-            'dispatch_number': self.dispatch_number,
-            'license_plate': self.license_plate,
-            'carriage_number': self.carriage_number,
-            'created_at': self.created_at,
-            'notes': self.notes,
-            'actual_volume': self.actual_volume,
-            'volume_photo_url': self.volume_photo_url,
-            'volume_modified_by': self.volume_modified_by,
-            'required_volume': self.required_volume,
-            'confirmed_volume': self.confirmed_volume,
-            'vehicle_type': self.vehicle_type,
-            'supplier_id': self.supplier_id,
-            'supplier_type': self.supplier_type,
-            'driver_name': self.driver_name,
-            'driver_phone': self.driver_phone,
-            'driver_id_card': getattr(self, 'driver_id_card', None),
-            'status': self.status,
-            'confirmed_by': self.confirmed_by,
-            'confirmed_at': self.confirmed_at,
-            'is_merged': self.is_merged,
-            'is_downgraded': self.is_downgraded,
-            'original_capacity': self.original_capacity,
-            'updated_at': self.updated_at
-        }

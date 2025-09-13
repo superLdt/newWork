@@ -71,7 +71,58 @@ class DispatchBusiness:
             return DispatchBusiness._bad("completion_note 必须为字符串")
         return DispatchBusiness._ok()
 
+    # == 新增：根据角色决定初始状态的辅助方法 ==
+    @staticmethod
+    def _get_initial_status_by_role_and_business_type(business_type: str) -> str:
+        """
+        根据用户角色和业务类型获取初始状态
+        
+        参数:
+            business_type: 业务类型（自办派车/委办派车）
+        
+        返回:
+            str: 初始状态
+        """
+        # 获取当前用户角色
+        current_user = getattr(g, 'current_user', None)
+        if not current_user:
+            return '待审核'  # 默认待审核状态
+        
+        # 获取用户的第一个角色作为主要角色
+        user_roles = [role.name for role in current_user.roles] if current_user.roles else []
+        if not user_roles:
+            return '待审核'  # 默认待审核状态
+        
+        primary_role = user_roles[0]
+        
+        # 根据角色和业务类型确定初始状态
+        if primary_role in ['超级管理员', '区域调度员']:
+            return '审核通过'  # 管理员和区域调度员创建的任务直接审核通过
+        elif primary_role == '车间地调':
+            return '待审核'   # 车间地调创建的任务需要审核
+        else:
+            return '待审核'   # 其他角色默认需要审核
+    
+    @staticmethod
+    def _determine_next_status_after_approval(data: Dict[str, Any], business_type: str) -> str:
+        """
+        根据业务规则决定审核通过后的下一个状态
+        
+        参数:
+            data: 派车任务数据
+            business_type: 业务类型
+            
+        返回:
+            str: 下一个状态
+        """
+        # 根据业务类型决定下一个状态
+        if business_type == '委办派车':
+            return '待响应'  # 委办派车等待供应商响应
+        else:
+            return '待响应'  # 自办派车等待内部车队响应
+
     # == 既有方法 ==
+    @staticmethod
     def create_dispatch_task(data: Dict[str, Any]) -> Dict[str, Any]:
         """
         创建派车任务
@@ -82,16 +133,23 @@ class DispatchBusiness:
         返回:
             Dict[str, Any]: 创建的派车任务
         """
-        # 验证必填字段
-        required_fields = ['title', 'description', 'start_time', 'end_time', 'vehicle_type', 'passenger_count']
+        # 验证必填字段 - 与服务层create_task方法保持一致
+        required_fields = ['required_date', 'origin_bureau', 'mail_route_name', 'transport_type', 'requirement_type', 'standard_weight', 'standard_volume', 'actual_volume']
         for field in required_fields:
             if field not in data:
                 raise ValueError(f"缺少必填字段: {field}")
         
-        # 设置初始状态为待审核
-        data['status'] = 'pending'
+        # 根据业务类型和用户角色设置初始状态
+        business_type = data.get('business_type', '委办派车')
+        initial_status = DispatchBusiness._get_initial_status_by_role_and_business_type(business_type)
+        data['status'] = initial_status
         data['created_by'] = g.current_user.id if hasattr(g, 'current_user') else None
         data['created_at'] = datetime.now()
+        
+        # 如果是超级管理员或区域调度员发起，直接设置为审核通过后的状态
+        if initial_status == '审核通过':
+            next_status = DispatchBusiness._determine_next_status_after_approval(data, business_type)
+            data['status'] = next_status
         
         # 调用服务层创建任务
         task = DispatchService.create_dispatch_task(data)
@@ -99,12 +157,14 @@ class DispatchBusiness:
         # 记录操作日志
         log_details = {
             'task_data': {
-                'title': data.get('title'),
-                'description': data.get('description'),
-                'start_time': str(data.get('start_time')),
-                'end_time': str(data.get('end_time')),
-                'vehicle_type': data.get('vehicle_type'),
-                'passenger_count': data.get('passenger_count')
+                'required_date': str(data.get('required_date')),
+                'origin_bureau': data.get('origin_bureau'),
+                'mail_route_name': data.get('mail_route_name'),
+                'transport_type': data.get('transport_type'),
+                'requirement_type': data.get('requirement_type'),
+                'standard_weight': data.get('standard_weight'),
+                'standard_volume': data.get('standard_volume'),
+                'actual_volume': data.get('actual_volume')
             }
         }
         # 修复错误的键名，使用 task_id
@@ -129,8 +189,8 @@ class DispatchBusiness:
         if not task:
             raise ValueError("派车任务不存在")
         
-        # 验证任务状态，只有待审核状态的任务可以更新（兼容英文代码和中文状态）
-        if task['status'] not in ['pending', '待审核']:
+        # 验证任务状态，只有待审核状态的任务可以更新
+        if task['status'] != '待审核':
             raise ValueError(f"当前任务状态为 {task['status']}，不能更新")
         
         # 调用服务层更新任务
@@ -169,16 +229,22 @@ class DispatchBusiness:
         if not task:
             raise ValueError("派车任务不存在")
         
-        # 验证任务状态，只有待审核状态的任务可以审批（兼容英文代码和中文状态）
-        if task['status'] not in ['pending', '待审核']:
+        # 验证任务状态，只有待审核状态的任务可以审批
+        if task['status'] != '待审核':
             raise ValueError(f"当前任务状态为 {task['status']}，不能进行审批操作")
         
         # 获取审批结果和备注（兼容 is_approved / approved）
         is_approved = approval_data.get('is_approved', approval_data.get('approved', False))
         comment = approval_data.get('comment', '')
         
-        # 确定新状态
-        new_status = 'approved' if is_approved else 'rejected'
+        # 确定新状态：业务要求审核通过后进入“待响应”状态
+        if is_approved:
+            # 如果有业务类型则通过规则函数决定（目前规则同样返回“待响应”）
+            business_type = task.get('business_type')
+            next_status = DispatchBusiness._determine_next_status_after_approval(task, business_type)
+            new_status = next_status or '待响应'
+        else:
+            new_status = '审核拒绝'
         
         # 使用状态管理器更新任务状态
         result = DispatchStatusManager.update_task_status(task_id, new_status, comment)
@@ -209,8 +275,10 @@ class DispatchBusiness:
         if not task:
             raise ValueError("派车任务不存在")
         
-        # 验证任务状态，只有已审批状态的任务可以分配车辆（兼容英文代码和中文状态）
-        if task['status'] not in ['approved', '审核通过']:
+        # 验证任务状态：允许在“审核通过/待响应”阶段分配车辆
+        from app.business.dispatch.status_manager import DispatchStatusManager as _DSM
+        norm_status = _DSM._normalize_status(task['status'])
+        if norm_status != 'approved':
             raise ValueError(f"当前任务状态为 {task['status']}，不能进行车辆分配操作")
         
         # 验证车辆数据（允许缺少 vehicle_id 时按车牌新建）
@@ -223,9 +291,9 @@ class DispatchBusiness:
         # 调用服务层分配车辆
         vehicle_assignment = DispatchService.assign_vehicle_to_task(task_id, vehicle_data)
         
-        # 使用状态管理器更新任务状态
+        # 使用状态管理器更新任务状态 -> 进入“已分配”
         comment = f"分配车辆: {vehicle_data.get('vehicle_id') or vehicle_data.get('license_plate')}"
-        result = DispatchStatusManager.update_task_status(task_id, 'assigned', comment)
+        result = DispatchStatusManager.update_task_status(task_id, '已分配', comment)
         
         # 记录操作日志
         log_details = {
@@ -254,8 +322,8 @@ class DispatchBusiness:
         if not task:
             raise ValueError("派车任务不存在")
         
-        # 验证任务状态，已分配或进行中的任务可以完成（兼容英文代码和中文状态）
-        if task['status'] not in ['assigned', 'in_progress', '供应商已响应', '进行中']:
+        # 验证任务状态，已响应的任务可以完成
+        if task['status'] != '已响应':
             raise ValueError(f"当前任务状态为 {task['status']}，不能进行任务完成操作")
         
         # 兼容 completion_note 与 completion_notes

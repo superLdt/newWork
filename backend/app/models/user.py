@@ -23,13 +23,13 @@ class User(db.Model):
     full_name = db.Column(db.String(100), comment='姓名')
     email = db.Column(db.String(120), comment='邮箱')
     phone = db.Column(db.String(20), comment='手机号')
-    company_id = db.Column(db.Integer, db.ForeignKey('Company.id'), comment='所属公司ID')
+    dispatch_unit_id = db.Column(db.Integer, db.ForeignKey('dispatch_units.id'), comment='所属派车单位ID')
     is_active = db.Column(db.Boolean, default=True, comment='是否激活')
     created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment='更新时间')
     
     # 关系定义
-    company = db.relationship('Company', backref=db.backref('users', lazy=True))
+    dispatch_unit = db.relationship('DispatchUnit', backref=db.backref('users', lazy=True))
     roles = db.relationship('Role', secondary=user_role, backref=db.backref('users', lazy=True))
 
     def set_password(self, password):
@@ -67,8 +67,8 @@ class User(db.Model):
             'fullname': self.full_name or self.username,   # 兼容前端字段
             'email': self.email,
             'phone': self.phone,
-            'company_id': self.company_id,
-            'company': self.company.to_dict() if self.company else None,
+            'dispatch_unit_id': self.dispatch_unit_id,
+            'dispatch_unit': self.dispatch_unit.to_dict() if self.dispatch_unit else None,
             'is_active': self.is_active,
             'roles': [role.to_dict() for role in self.roles],
             'created_at': self.created_at.isoformat() if self.created_at else None,

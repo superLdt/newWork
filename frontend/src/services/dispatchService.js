@@ -115,11 +115,27 @@ export const dispatchService = {
    */
   async auditTask(taskId, auditData) {
     try {
-      const response = await apiClient.post(`/dispatch/tasks/${taskId}/audit`, auditData)
-      return response
+      const data = await apiClient.post(`/dispatch/tasks/${taskId}/audit`, auditData)
+      // 统一成功判定与规范化
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '审核任务成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      return data
     } catch (error) {
       console.error('审核派车任务失败:', error)
-      throw error
+      // 保持与其他方法一致的错误返回
+      return error
     }
   },
 
@@ -131,11 +147,25 @@ export const dispatchService = {
    */
   async assignVehicles(taskId, assignData) {
     try {
-      const response = await apiClient.post(`/dispatch/tasks/${taskId}/assign`, assignData)
-      return response
+      const data = await apiClient.post(`/dispatch/tasks/${taskId}/assign`, assignData)
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '分配车辆成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      return data
     } catch (error) {
       console.error('分配车辆失败:', error)
-      throw error
+      return error
     }
   },
 
@@ -147,11 +177,25 @@ export const dispatchService = {
    */
   async completeTask(taskId, completeData) {
     try {
-      const response = await apiClient.post(`/dispatch/tasks/${taskId}/complete`, completeData)
-      return response
+      const data = await apiClient.post(`/dispatch/tasks/${taskId}/complete`, completeData)
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '完成任务成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      return data
     } catch (error) {
       console.error('完成派车任务失败:', error)
-      throw error
+      return error
     }
   },
 

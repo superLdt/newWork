@@ -186,8 +186,8 @@ class DispatchController:
             if not validation_result['valid']:
                 return error_response(validation_result['message'], 400)
             
-            # 调用服务层创建派车任务
-            task = DispatchService.create_dispatch_task(data)
+            # 调用业务层创建派车任务（包含角色判断逻辑）
+            task = DispatchBusiness.create_dispatch_task(data)
             
             # 返回成功响应
             return success_response(task, code=201)

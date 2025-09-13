@@ -4,7 +4,7 @@
 """
 
 from .user import User
-from .company import Company
+from .company import DispatchUnit
 from .role import Role
 from .user_role import user_role
 from .task import ManualDispatchTask
@@ -21,7 +21,7 @@ from .dispatch.operation_log import OperationLog
 
 __all__ = [
     'User',
-    'Company', 
+    'DispatchUnit', 
     'Role',
     'ManualDispatchTask',
     'Vehicle',

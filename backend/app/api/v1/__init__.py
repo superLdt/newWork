@@ -15,6 +15,8 @@ from . import user_management, permission_management, menu_management, role_perm
 from .role_management import role_bp
 from .vehicle import vehicle_bp
 from .dispatch import dispatch_bp
+from .dispatch_unit_routes import dispatch_unit_bp
+from .user_management_routes import user_management_bp
 
 # 注册所有API蓝图
 api_v1_bp.register_blueprint(permission_management.bp)
@@ -23,3 +25,5 @@ api_v1_bp.register_blueprint(role_permission_management.bp)
 api_v1_bp.register_blueprint(role_management.role_bp)
 api_v1_bp.register_blueprint(vehicle_bp)
 api_v1_bp.register_blueprint(dispatch_bp)
+api_v1_bp.register_blueprint(dispatch_unit_bp)
+api_v1_bp.register_blueprint(user_management_bp)

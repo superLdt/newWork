@@ -43,8 +43,10 @@ class DispatchStatusManager:
             '任务完成': 'completed',
             '已取消': 'cancelled',
             # 业务中提到的供应商相关状态做合理映射
-            '待供应商响应': 'assigned',
-            '供应商已响应': 'in_progress'
+            '待供应商响应': 'approved',
+            '供应商已响应': 'in_progress',
+            # 修正：通用“待响应”应视为审核通过阶段
+            '待响应': 'approved'
         }
         # 已经是英文代码或未识别的状态原样返回
         return mapping.get(status, status)
@@ -158,7 +160,7 @@ class DispatchStatusManager:
         if current_status not in DispatchStatusManager.STATUS_TRANSITIONS:
             logger.error(f"无效的当前状态: {current_status}")
             return []
-            
+        
         return DispatchStatusManager.STATUS_TRANSITIONS.get(current_status, [])
     
     @staticmethod

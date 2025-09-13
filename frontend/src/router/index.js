@@ -49,12 +49,13 @@ const routes = [
         }
       },
       {
-        path: '/basic-data/customers',
-        name: 'Customers',
-        component: ComingSoon,
+        path: '/basic-data/dispatch-units',
+        name: 'DispatchUnits',
+        component: () => import('../pages/basic-data/DispatchUnitManagement.vue'),
         meta: {
-          title: '客户管理',
-          menuCode: 'customer_management'
+          title: '派车单位管理',
+          menuCode: 'dispatch_unit_management',
+          permissions: ['dispatch_unit:read']
         }
       },
       // 调度管理路由

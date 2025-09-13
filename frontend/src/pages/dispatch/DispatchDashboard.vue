@@ -224,7 +224,7 @@ export default {
           orient: 'vertical',
           right: 10,
           top: 'center',
-          data: dashboardData.status_distribution.map(item => item.status)
+          data: dashboardData.status_distribution.filter(item => item && item.status).map(item => item.status)
         },
         series: [{
           name: '任务状态',
@@ -250,7 +250,7 @@ export default {
           labelLine: {
             show: false
           },
-          data: dashboardData.status_distribution.map(item => ({
+          data: dashboardData.status_distribution.filter(item => item && item.status && item.count !== undefined).map(item => ({
             value: item.count,
             name: item.status
           }))
@@ -281,7 +281,7 @@ export default {
           orient: 'vertical',
           right: 10,
           top: 'center',
-          data: dashboardData.track_distribution.map(item => item.dispatch_track)
+          data: dashboardData.track_distribution.filter(item => item && item.dispatch_track).map(item => item.dispatch_track)
         },
         series: [{
           name: '轨道类型',
@@ -307,7 +307,7 @@ export default {
           labelLine: {
             show: false
           },
-          data: dashboardData.track_distribution.map(item => ({
+          data: dashboardData.track_distribution.filter(item => item && item.dispatch_track && item.count !== undefined).map(item => ({
             value: item.count,
             name: item.dispatch_track
           }))
