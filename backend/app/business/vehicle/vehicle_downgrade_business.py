@@ -65,7 +65,7 @@ class VehicleDowngradeBusiness:
         
         return {
             'success': True,
-            'message': f"成功将车辆 {vehicle.get('plate_number')} 从 {downgrade_record.get('previous_type')} 降档为 {downgrade_record.get('new_type')}",
+            'message': f"成功将车辆 {vehicle.license_plate} 从 {downgrade_record.get('previous_type')} 降档为 {downgrade_record.get('new_type')}",
             'downgrade_record': downgrade_result
         }
     

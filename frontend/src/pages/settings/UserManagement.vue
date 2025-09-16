@@ -541,13 +541,14 @@ export default {
       this.roleAssignmentVisible = true
     },
     // 绑定派车单位
-    bindDispatchUnit(user) {
+    async bindDispatchUnit(user) {
       this.dispatchUnitForm = {
         user_id: user.id,
         username: user.username,
         current_unit: user.dispatch_unit ? user.dispatch_unit.name : '未绑定',
         dispatch_unit_id: user.dispatch_unit ? user.dispatch_unit.id : null
       }
+      await this.loadDispatchUnits()
       this.dispatchUnitBindVisible = true
     },
     // 加载派车单位列表
@@ -558,10 +559,12 @@ export default {
           this.dispatchUnits = response.data.items || []
         } else {
           ElMessage.error(response.message || '获取派车单位列表失败')
+          this.dispatchUnits = []
         }
       } catch (error) {
         console.error('获取派车单位列表失败:', error)
         ElMessage.error('获取派车单位列表失败')
+        this.dispatchUnits = []
       }
     },
     // 提交派车单位绑定

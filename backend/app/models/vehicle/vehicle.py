@@ -9,11 +9,12 @@ class Vehicle(db.Model):
     """
     车辆信息模型类
     对应数据库设计文档中的vehicles表
+    用于派车响应，必须关联具体的派车任务
     """
     __tablename__ = 'vehicles'
     
     id = db.Column(db.Integer, primary_key=True, comment='车辆唯一ID')
-    task_id = db.Column(db.String(50), db.ForeignKey('manual_dispatch_tasks.task_id'), comment='关联任务ID')
+    task_id = db.Column(db.String(50), db.ForeignKey('manual_dispatch_tasks.task_id'), nullable=False, comment='关联任务ID')
     manifest_number = db.Column(db.String(50), comment='路单流水号')
     dispatch_number = db.Column(db.String(50), comment='派车单号')
     license_plate = db.Column(db.String(20), comment='车牌号')

@@ -114,17 +114,17 @@
       </div>
       
       <el-table 
-        :data="previewData.preview_data || []" 
+        :data="previewRows" 
         border 
         max-height="400"
         class="preview-table"
       >
         <el-table-column prop="row" label="行号" width="80" align="center" />
-        <el-table-column prop="processed_data.license_plate" label="车牌号" width="120" />
-        <el-table-column prop="processed_data.carriage_number" label="车厢号" width="120" />
-        <el-table-column prop="processed_data.actual_volume" label="容积" width="100" />
-        <el-table-column prop="processed_data.vehicle_type" label="车辆类型" width="100" />
-        <el-table-column prop="processed_data.vehicle_category" label="车辆分类" width="100" />
+        <el-table-column prop="license_plate" label="车牌号" width="120" />
+        <el-table-column prop="carriage_number" label="车厢号" width="120" />
+        <el-table-column prop="actual_volume" label="容积" width="100" />
+        <el-table-column prop="vehicle_type" label="车辆类型" width="100" />
+        <el-table-column prop="vehicle_category" label="车辆分类" width="100" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.valid ? 'success' : 'danger'" size="small">
@@ -265,6 +265,23 @@ export default {
     const processing = ref(false)
     const exportLoading = ref(false)
     
+    // 扁平化预览数据，避免表格列 prop 使用点路径导致取值异常
+    const previewRows = computed(() => {
+      const list = previewData.value?.preview_data || []
+      return list.map(item => ({
+        row: item?.row ?? '',
+        // 扁平化 processed_data 下的字段
+        license_plate: item?.processed_data?.license_plate ?? '',
+        carriage_number: item?.processed_data?.carriage_number ?? '',
+        actual_volume: item?.processed_data?.actual_volume ?? '',
+        vehicle_type: item?.processed_data?.vehicle_type ?? '',
+        vehicle_category: item?.processed_data?.vehicle_category ?? '',
+        // 保留用于显示状态和错误信息
+        valid: item?.valid ?? false,
+        errors: Array.isArray(item?.errors) ? item.errors : []
+      }))
+    })
+    
     // 计算是否可以进行下一步
     const canProceed = computed(() => {
       if (currentStep.value === 0) {
@@ -288,11 +305,19 @@ export default {
       try {
         downloadLoading.value = true
         const response = await vehicleService.downloadImportTemplate()
-        
-        // 创建下载链接
-        const blob = new Blob([response.data], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        })
+
+        // 兼容拦截器已返回 Blob 的情况（response 即为 Blob），
+        // 以及未来可能返回 { data: Blob } 的情况
+        let blob
+        if (response instanceof Blob) {
+          blob = response
+        } else if (response && response.data instanceof Blob) {
+          blob = response.data
+        } else {
+          // 不符合预期，避免把 undefined 或对象当作文件写入
+          throw new Error('响应不是文件流，请检查登录状态或后端接口返回')
+        }
+
         const url = window.URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
@@ -424,10 +449,16 @@ export default {
           validation_results: previewData.value.validation_results
         })
         
-        // 创建下载链接
-        const blob = new Blob([response.data], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        })
+        // 兼容拦截器已返回 Blob 的情况
+        let blob
+        if (response instanceof Blob) {
+          blob = response
+        } else if (response && response.data instanceof Blob) {
+          blob = response.data
+        } else {
+          throw new Error('响应不是文件流，请检查后端接口返回')
+        }
+        
         const url = window.URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
@@ -493,7 +524,8 @@ export default {
       prevStep,
       exportErrors,
       handleClose,
-      handleFinish
+      handleFinish,
+      previewRows
     }
   }
 }

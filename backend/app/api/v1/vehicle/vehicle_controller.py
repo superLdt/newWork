@@ -201,7 +201,7 @@ class VehicleController:
             
             # 获取当前用户ID
             from flask import g
-            user_id = getattr(g, 'current_user', {}).get('id')
+            user_id = g.current_user.id if hasattr(g, 'current_user') and getattr(g, 'current_user') is not None else None
             
             # 验证导入权限
             permission_check = BatchImportService.validate_import_permission(user_id)

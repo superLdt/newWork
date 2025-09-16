@@ -33,42 +33,36 @@
       style="width: 100%"
       v-loading="loading"
     >
-      <el-table-column prop="plateNumber" label="车牌号" width="120"></el-table-column>
-      <el-table-column prop="compartmentNumber" label="车厢号" width="120"></el-table-column>
-      <el-table-column prop="vehicleType" label="车型" width="100">
-        <template slot-scope="scope">
-          {{ scope.row.vehicleType }}吨
+      <el-table-column prop="license_plate" label="车牌号" width="120"></el-table-column>
+      <el-table-column prop="carriage_number" label="车厢号" width="120"></el-table-column>
+      <el-table-column prop="vehicle_type" label="车型" width="100">
+        <template #default="{ row }">
+          {{ row.vehicle_type }}
         </template>
       </el-table-column>
-      <el-table-column prop="originalCapacity" label="原始载重量(吨)" width="150"></el-table-column>
-      <el-table-column prop="actualVolume" label="实际容积(m³)" width="150"></el-table-column>
-      <el-table-column prop="conversionFactor" label="折算系数" width="120"></el-table-column>
+      <el-table-column prop="original_capacity" label="原始载重量(吨)" width="150"></el-table-column>
+      <el-table-column prop="standard_volume" label="标准容积(m³)" width="150"></el-table-column>
       <el-table-column prop="status" label="状态" width="100">
-        <template slot-scope="scope">
-          <el-tag :type="scope.row.status === 'active' ? 'success' : 'info'">
-            {{ scope.row.status === 'active' ? '启用' : '禁用' }}
+        <template #default="{ row }">
+          <el-tag :type="row.status === 'active' ? 'success' : 'info'">
+            {{ row.status === 'active' ? '启用' : '禁用' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="lastUpdated" label="最后更新时间" width="180"></el-table-column>
+      <el-table-column prop="updated_at" label="最后更新时间" width="180"></el-table-column>
       <el-table-column label="操作" fixed="right" width="250">
-        <template slot-scope="scope">
+        <template #default="{ row }">
           <el-button 
             size="mini" 
             type="primary" 
-            @click="handleEdit(scope.row)"
+            @click="handleEdit(row)"
             v-permission="'vehicle:update'"
           >编辑</el-button>
-          <el-button 
-            size="mini" 
-            type="success" 
-            @click="handleUpdateVolume(scope.row)"
-            v-permission="'workshop:update_volume'"
-          >更新容积</el-button>
+
           <el-button 
             size="mini" 
             type="danger" 
-            @click="handleDelete(scope.row)"
+            @click="handleDelete(row)"
             v-permission="'vehicle:delete'"
           >删除</el-button>
         </template>
@@ -93,12 +87,12 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="车牌号" prop="plateOrCarriage">
-              <el-input v-model="vehicleForm.plateNumber" placeholder="请输入车牌号"></el-input>
+              <el-input v-model="vehicleForm.license_plate" placeholder="请输入车牌号"></el-input>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="车厢号" prop="compartmentNumber">
-              <el-input v-model="vehicleForm.compartmentNumber" placeholder="如：皖A36T3挂"></el-input>
+              <el-input v-model="vehicleForm.carriage_number" placeholder="如：皖A36T3挂"></el-input>
             </el-form-item>
           </el-col>
         </el-row>
@@ -106,7 +100,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="车型" prop="vehicleType">
-              <el-select v-model="vehicleForm.vehicleType" placeholder="请选择车型" @change="handleVehicleTypeChange">
+              <el-select v-model="vehicleForm.vehicle_type" placeholder="请选择车型" @change="handleVehicleTypeChange">
                 <el-option label="5吨" value="5吨"></el-option>
                 <el-option label="8吨" value="8吨"></el-option>
                 <el-option label="12吨" value="12吨"></el-option>
@@ -119,38 +113,38 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="车辆分类">
-              <el-input v-model="vehicleForm.vehicleCategory" readonly placeholder="自动识别"></el-input>
+              <el-input v-model="vehicleForm.vehicle_category" readonly placeholder="自动识别"></el-input>
             </el-form-item>
           </el-col>
         </el-row>
         
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="实际容积(m³)" prop="actualVolume">
-              <el-input-number v-model="vehicleForm.actualVolume" :min="0.1" :precision="2" placeholder="必填"></el-input-number>
+            <el-form-item label="标准容积(m³)" prop="standardVolume">
+              <el-input-number v-model="vehicleForm.standard_volume" :min="0.1" :precision="2" placeholder="必填"></el-input-number>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="原始载重量(吨)">
-              <el-input-number v-model="vehicleForm.originalCapacity" :min="0" :precision="2"></el-input-number>
+              <el-input-number v-model="vehicleForm.original_capacity" :min="0" :precision="2"></el-input-number>
             </el-form-item>
           </el-col>
         </el-row>
         
         <el-form-item label="常用公司">
           <el-select 
-            v-model="vehicleForm.frequentCompanies" 
+            v-model="vehicleForm.frequent_companies" 
             multiple 
             filterable 
-            allow-create 
-            placeholder="请选择或输入常用公司"
+            placeholder="请选择派车单位"
             style="width: 100%"
+            :loading="loadingCompanies"
           >
             <el-option 
-              v-for="company in companyOptions" 
-              :key="company" 
-              :label="company" 
-              :value="company"
+              v-for="unit in dispatchUnitOptions" 
+              :key="unit.id" 
+              :label="unit.name" 
+              :value="unit.name"
             ></el-option>
           </el-select>
         </el-form-item>
@@ -158,13 +152,10 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="供应商类型">
-              <el-select v-model="vehicleForm.supplierType" placeholder="请选择供应商类型">
-                <el-option 
-                  v-for="option in supplierTypeOptions" 
-                  :key="option.value" 
-                  :label="option.label" 
-                  :value="option.value"
-                ></el-option>
+              <el-select v-model="vehicleForm.suppliers" placeholder="请选择供应商类型" style="width: 100%">
+                <el-option label="内部单位" value="内部单位"></el-option>
+                <el-option label="供应商" value="供应商"></el-option>
+                <el-option label="外包驾驶管理公司" value="外包驾驶管理公司"></el-option>
               </el-select>
             </el-form-item>
           </el-col>
@@ -181,29 +172,17 @@
           </el-col>
         </el-row>
         
-        <el-form-item label="备注">
-          <el-input 
-            v-model="vehicleForm.notes" 
-            type="textarea" 
-            :rows="3" 
-            placeholder="请输入备注信息"
-          ></el-input>
-        </el-form-item>
+
       </el-form>
-+      <template #footer>
-+        <div class="dialog-footer">
-+          <el-button @click="vehicleDialogVisible = false">取消</el-button>
-+          <el-button type="primary" @click="submitVehicleForm">确定</el-button>
-+        </div>
-+      </template>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="vehicleDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitVehicleForm">确定</el-button>
+        </div>
+      </template>
      </el-dialog>
     
-    <!-- 更新容积对话框 -->
-    <volume-form 
-      :visible.sync="volumeDialogVisible" 
-      :vehicle="selectedVehicle" 
-      @update-success="handleVolumeUpdateSuccess"
-    ></volume-form>
+
     
     <!-- 批量导入对话框 -->
     <vehicle-import-dialog 
@@ -214,16 +193,15 @@
 </template>
 
 <script>
-import VolumeForm from './components/VolumeForm.vue';
 import VehicleImportDialog from '@/components/VehicleImportDialog.vue';
-import { vehicleService, addVehicle, updateVehicle, deleteVehicle } from '@/services/vehicleService';
+import { vehicleCapacityReferenceService } from '@/services/vehicleCapacityReferenceService';
+import { dispatchUnitService } from '@/services/dispatchUnitService';
 import permission from '@/directives/permission';
 import { Upload } from '@element-plus/icons-vue';
 
 export default {
   name: 'VehicleManagement',
   components: {
-    VolumeForm,
     VehicleImportDialog,
     Upload
   },
@@ -240,22 +218,18 @@ export default {
       pageSize: 10,
       totalVehicles: 0,
       vehicleDialogVisible: false,
-      volumeDialogVisible: false,
       importDialogVisible: false,
       dialogTitle: '',
-      selectedVehicle: null,
       vehicleForm: {
         id: null,
-        plateNumber: '',
-        compartmentNumber: '',
-        vehicleType: '',
-        vehicleCategory: '',
-        originalCapacity: 0,
-        actualVolume: 0,
-        conversionFactor: 0,
-        frequentCompanies: [],
-        notes: '',
-        supplierType: '',
+        license_plate: '',
+        carriage_number: '',
+        vehicle_type: '',
+        vehicle_category: '',
+        original_capacity: 0,
+        standard_volume: 0,
+        frequent_companies: [],
+        suppliers: '',
         status: 'active'
       },
       vehicleRules: {
@@ -263,7 +237,7 @@ export default {
         plateOrCarriage: [
           {
             validator: (rule, value, callback) => {
-              if (!this.vehicleForm.plateNumber && !this.vehicleForm.compartmentNumber) {
+              if (!this.vehicleForm.license_plate && !this.vehicleForm.carriage_number) {
                 callback(new Error('车牌号或车厢号至少需要填写一个'))
               } else {
                 callback()
@@ -272,9 +246,9 @@ export default {
             trigger: 'blur'
           }
         ],
-        actualVolume: [
-          { required: true, message: '请输入容积', trigger: 'blur' },
-          { type: 'number', min: 0.1, message: '容积必须大于0', trigger: 'blur' }
+        standardVolume: [
+          { required: true, message: '请输入标准容积', trigger: 'blur' },
+          { type: 'number', min: 0.1, message: '标准容积必须大于0', trigger: 'blur' }
         ],
         compartmentNumber: [
           {
@@ -291,39 +265,23 @@ export default {
           }
         ]
       },
-      // 车型折算系数表
-      conversionFactors: {
-        '5吨': 0.45,
-        '8吨': 0.51,
-        '12吨': 0.63,
-        '20吨': 0.83,
-        '30吨': 1.00,
-        '40吨A': 1.12,
-        '40吨B': 1.23
-      },
-      // 供应商类型选项
-      supplierTypeOptions: [
-        { value: '委办公司', label: '委办公司' },
-        { value: '班组', label: '班组' },
-        { value: '承运商', label: '承运商' }
-      ],
-      // 公司选项（示例数据，实际应从后端获取）
-      companyOptions: [
-        '公司A', '公司B', '公司C', '公司D', '公司E'
-      ]
+
+      dispatchUnitOptions: [],
+      loadingCompanies: false
     };
   },
   created() {
     this.fetchVehicles();
+    this.fetchDispatchUnits();
   },
   methods: {
     // 获取车辆列表
     async fetchVehicles() {
       this.loading = true;
       try {
-        const response = await vehicleService.getVehicleList({
+        const response = await vehicleCapacityReferenceService.getVehicleList({
           page: this.currentPage,
-          pageSize: this.pageSize,
+          per_page: this.pageSize,
           query: this.searchQuery
         });
         if (response.code === 0) {
@@ -349,8 +307,8 @@ export default {
       
       const query = this.searchQuery.toLowerCase();
       this.filteredVehicles = this.vehicles.filter(vehicle => {
-        return vehicle.plateNumber.toLowerCase().includes(query) || 
-               vehicle.compartmentNumber.toLowerCase().includes(query);
+        return vehicle.license_plate.toLowerCase().includes(query) || 
+               vehicle.carriage_number.toLowerCase().includes(query);
       });
     },
     
@@ -363,6 +321,27 @@ export default {
       this.currentPage = page;
       this.fetchVehicles();
     },
+
+    // 获取派车单位列表
+    async fetchDispatchUnits() {
+      this.loadingCompanies = true;
+      try {
+        const response = await dispatchUnitService.getDispatchUnitList({
+          page: 1,
+          per_page: 1000 // 获取所有单位
+        });
+        if (response.code === 0) {
+          this.dispatchUnitOptions = response.data.items || [];
+        } else {
+          this.$message.error(response.message || '获取派车单位列表失败');
+        }
+      } catch (error) {
+        console.error('获取派车单位列表失败:', error);
+        this.$message.error('获取派车单位列表失败：' + error.message);
+      } finally {
+        this.loadingCompanies = false;
+      }
+    },
     
     // 显示添加车辆对话框
     showAddVehicleDialog(vehicle = null) {
@@ -370,16 +349,14 @@ export default {
       this.dialogTitle = '添加车辆';
       this.vehicleForm = {
         id: null,
-        plateNumber: '',
-        compartmentNumber: '',
-        vehicleType: '',
-        vehicleCategory: '',
-        originalCapacity: 0,
-        actualVolume: 0,
-        conversionFactor: 0,
-        frequentCompanies: [],
-        notes: '',
-        supplierType: '',
+        license_plate: '',
+        carriage_number: '',
+        vehicle_type: '',
+        vehicle_category: '',
+        original_capacity: 0,
+        standard_volume: 0,
+        frequent_companies: [],
+        suppliers: '',
         status: 'active'
       };
       this.vehicleDialogVisible = true;
@@ -390,22 +367,18 @@ export default {
       this.dialogTitle = '编辑车辆';
       this.vehicleForm = {
         ...vehicle,
-        frequentCompanies: vehicle.frequent_companies || [],
-        plateNumber: vehicle.license_plate || '',
-        compartmentNumber: vehicle.carriage_number || '',
-        actualVolume: vehicle.actual_volume || 0,
-        originalCapacity: vehicle.original_capacity || 0,
-        vehicleCategory: vehicle.vehicle_category || '',
-        supplierType: vehicle.supplier_type || ''
+        frequent_companies: vehicle.frequent_companies || [],
+        license_plate: vehicle.license_plate || '',
+        carriage_number: vehicle.carriage_number || '',
+        standard_volume: vehicle.standard_volume || 0,
+        original_capacity: vehicle.original_capacity || 0,
+        vehicle_category: vehicle.vehicle_category || '',
+        suppliers: vehicle.suppliers || ''
       };
       this.vehicleDialogVisible = true;
     },
     
-    // 更新容积
-    handleUpdateVolume(vehicle) {
-      this.selectedVehicle = vehicle;
-      this.volumeDialogVisible = true;
-    },
+
     
     // 删除车辆
     handleDelete(vehicle) {
@@ -415,9 +388,13 @@ export default {
         type: 'warning'
       }).then(async () => {
         try {
-          await deleteVehicle(vehicle.id);
-          this.$message.success('删除成功');
-          this.fetchVehicles();
+          const response = await vehicleCapacityReferenceService.deleteVehicle(vehicle.id);
+          if (response.code === 0) {
+            this.$message.success('删除成功');
+            this.fetchVehicles();
+          } else {
+            this.$message.error(response.message || '删除失败');
+          }
         } catch (error) {
           this.$message.error('删除失败：' + error.message);
         }
@@ -428,42 +405,42 @@ export default {
     
     // 提交车辆表单
     submitVehicleForm() {
-      console.log('submitVehicleForm triggered'); // Add this line
+      console.log('submitVehicleForm triggered');
       this.$refs.vehicleForm.validate(async valid => {
-        console.log('Form validation result:', valid); // Add this line
+        console.log('Form validation result:', valid);
         if (!valid) return;
         
         try {
-          // 根据车型设置折算系数
-          this.vehicleForm.conversionFactor = this.conversionFactors[this.vehicleForm.vehicleType] || 0;
-          
           // 创建后端期望的字段映射
           const vehicleData = {
-            license_plate: this.vehicleForm.plateNumber,
-            carriage_number: this.vehicleForm.compartmentNumber,
-            vehicle_type: this.vehicleForm.vehicleType,
-            vehicle_category: this.vehicleForm.vehicleCategory,
-            original_capacity: this.vehicleForm.originalCapacity,
-            actual_volume: this.vehicleForm.actualVolume,
-            frequent_companies: this.vehicleForm.frequentCompanies,
-            notes: this.vehicleForm.notes,
-            supplier_type: this.vehicleForm.supplierType,
+            license_plate: this.vehicleForm.license_plate,
+            carriage_number: this.vehicleForm.carriage_number,
+            vehicle_type: this.vehicleForm.vehicle_type,
+            vehicle_category: this.vehicleForm.vehicle_category,
+            original_capacity: this.vehicleForm.original_capacity,
+            standard_volume: this.vehicleForm.standard_volume,
+            frequent_companies: this.vehicleForm.frequent_companies,
+            suppliers: this.vehicleForm.suppliers,
             status: this.vehicleForm.status
           };
-          console.log('Submitting vehicle data:', vehicleData); // Add this line
+          console.log('Submitting vehicle data:', vehicleData);
           
+          let response;
           if (this.vehicleForm.id) {
             // 更新车辆
-            await updateVehicle({ id: this.vehicleForm.id, ...vehicleData });
-            this.$message.success('更新成功');
+            response = await vehicleCapacityReferenceService.updateVehicle({ id: this.vehicleForm.id, ...vehicleData });
           } else {
             // 添加车辆
-            await addVehicle(vehicleData);
-            this.$message.success('添加成功');
+            response = await vehicleCapacityReferenceService.createVehicle(vehicleData);
           }
           
-          this.vehicleDialogVisible = false;
-          this.fetchVehicles();
+          if (response.code === 0) {
+            this.$message.success(this.vehicleForm.id ? '更新成功' : '添加成功');
+            this.vehicleDialogVisible = false;
+            this.fetchVehicles();
+          } else {
+            this.$message.error(response.message || (this.vehicleForm.id ? '更新失败' : '添加失败'));
+          }
         } catch (error) {
           this.$message.error((this.vehicleForm.id ? '更新' : '添加') + '失败：' + error.message);
         }
@@ -472,16 +449,16 @@ export default {
     
     // 处理车型变化
     handleVehicleTypeChange(value) {
-      // 根据车型自动设置折算系数
-      this.vehicleForm.conversionFactor = this.conversionFactors[value] || 0;
+      // 车型变化时的处理逻辑（如果需要的话）
+      console.log('车型已变更为:', value);
     },
     
     // 监听车厢号变化，自动设置车辆分类
     handleCarriageNumberChange() {
-      if (this.vehicleForm.compartmentNumber && this.vehicleForm.compartmentNumber.includes('挂')) {
-        this.vehicleForm.vehicleCategory = '挂车';
+      if (this.vehicleForm.carriage_number && this.vehicleForm.carriage_number.includes('挂')) {
+        this.vehicleForm.vehicle_category = '挂车';
       } else {
-        this.vehicleForm.vehicleCategory = '单车';
+        this.vehicleForm.vehicle_category = '单车';
       }
     },
 
@@ -496,21 +473,38 @@ export default {
       this.fetchVehicles(); // 刷新车辆列表
     },
     
-    // 容积更新成功回调
-    handleVolumeUpdateSuccess() {
-      this.fetchVehicles();
-    }
+    // 获取派车单位列表
+    async fetchDispatchUnits() {
+      this.loadingCompanies = true;
+      try {
+        const response = await dispatchUnitService.getDispatchUnitList();
+        if (response.code === 0) {
+          this.dispatchUnitOptions = response.data.items || response.data || [];
+        } else {
+          this.$message.error(response.message || '获取派车单位列表失败');
+          this.dispatchUnitOptions = [];
+        }
+      } catch (error) {
+        console.error('获取派车单位列表失败:', error);
+        this.$message.error('获取派车单位列表失败');
+        this.dispatchUnitOptions = [];
+      } finally {
+        this.loadingCompanies = false;
+      }
+    },
+    
+
   },
   
   watch: {
     // 监听车厢号变化
-    'vehicleForm.compartmentNumber'() {
+    'vehicleForm.carriage_number'() {
       this.handleCarriageNumberChange();
     },
     // 监听车牌号变化
-     'vehicleForm.plateNumber'() {
-       if (!this.vehicleForm.compartmentNumber) {
-         this.vehicleForm.vehicleCategory = '单车';
+     'vehicleForm.license_plate'() {
+       if (!this.vehicleForm.carriage_number) {
+         this.vehicleForm.vehicle_category = '单车';
        }
      }
   }

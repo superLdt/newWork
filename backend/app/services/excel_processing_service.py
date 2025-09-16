@@ -18,7 +18,7 @@ class ExcelProcessingService:
     FIELD_MAPPING = {
         '车牌号': 'license_plate',
         '车厢号': 'carriage_number', 
-        '容积': 'actual_volume',
+        '容积': 'standard_volume',
         '车辆类型': 'vehicle_type',
         '车辆分类': 'vehicle_category',
         '常用公司': 'frequent_companies',
@@ -31,7 +31,7 @@ class ExcelProcessingService:
     REVERSE_FIELD_MAPPING = {v: k for k, v in FIELD_MAPPING.items()}
     
     # 必填字段
-    REQUIRED_FIELDS = ['actual_volume']  # 容积必填
+    REQUIRED_FIELDS = ['standard_volume']  # 容积必填
     
     # 车辆类型选项
     VEHICLE_TYPE_OPTIONS = ['5吨', '8吨', '12吨', '20吨', '30吨', '40吨A', '40吨B']
@@ -50,72 +50,74 @@ class ExcelProcessingService:
         Returns:
             bytes: Excel文件的二进制数据
         """
-        # 创建示例数据
+        import pandas as pd
+        from io import BytesIO
+        import numpy as np
+        
+        # 根据用户提供的样本格式，只包含车牌号、车厢号、容积三个字段
         template_data = {
-            '车牌号': ['皖A12345', '京B67890', '沪C11111'],
-            '车厢号': ['皖A36T3挂', '', '沪C22222挂'],
-            '容积': [25.5, 30.0, 18.8],
-            '车辆类型': ['5吨', '8吨', '5吨'],
-            '车辆分类': ['挂车', '单车', '挂车'],
-            '常用公司': ['公司A,公司B', '公司C', '公司D,公司E,公司F'],
-            '备注': ['测试数据1', '测试数据2', '测试数据3'],
-            '供应商类型': ['委办公司', '班组', '承运商'],
-            '状态': ['待确认', '已确认', '待确认']
+            '车牌号': ['', '皖B56620', '', '京A12345'],
+            '车厢号': ['', '', '皖CHY09挂', '京B67890挂'],
+            '容积': ['', 64.56, 131.72, 45.8]
         }
         
-        df = pd.DataFrame(template_data)
+        # 只包含三个字段
+        column_order = ['车牌号', '车厢号', '容积']
+        
+        # 按指定顺序创建DataFrame
+        df = pd.DataFrame(template_data, columns=pd.Index(column_order))
         
         # 创建Excel文件
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # 写入数据到工作表
-            df.to_excel(writer, sheet_name='车辆信息', index=False, startrow=3)
+        writer = pd.ExcelWriter(output, engine='openpyxl')  # type: ignore
+        # 写入数据到工作表，第一行是列名
+        df.to_excel(writer, sheet_name='车辆信息', index=False)
+        
+        # 获取工作表对象
+        worksheet = writer.sheets['车辆信息']
+        
+        # 设置列宽
+        column_widths = {
+            'A': 15,  # 车牌号
+            'B': 15,  # 车厢号
+            'C': 10   # 容积
+        }
+        
+        for col, width in column_widths.items():
+            worksheet.column_dimensions[col].width = width
+        
+        # 设置标题行样式
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color='E6F3FF', end_color='E6F3FF', fill_type='solid')
+        center_alignment = Alignment(horizontal='center', vertical='center')
+        
+        # 设置表头样式（第1行）
+        for col in range(1, 4):  # A到C列
+            cell = worksheet.cell(row=1, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_alignment
+        
+        # 添加说明信息作为批注
+        try:
+            from openpyxl.comments import Comment
+            comment = Comment(
+                "导入说明：\n"
+                "1. 车牌号或车厢号至少填写一个\n"
+                "2. 容积字段必填\n"
+                "3. 车厢号格式如：皖CHY09挂\n"
+                "4. 第一行是列标题，请勿删除",
+                "系统"
+            )
+            worksheet['A1'].comment = comment
+        except ImportError:
+            # 如果无法导入Comment，跳过批注添加
+            pass
             
-            # 获取工作表对象
-            worksheet = writer.sheets['车辆信息']
-            
-            # 添加说明信息
-            worksheet['A1'] = '车辆信息导入模板'
-            worksheet['A2'] = '说明：1. 车牌号或车厢号至少填写一个；2. 容积必填；3. 车厢号格式如：皖A36T3挂；4. 常用公司用逗号分隔'
-            
-            # 设置列宽
-            column_widths = {
-                'A': 15,  # 车牌号
-                'B': 15,  # 车厢号
-                'C': 10,  # 容积
-                'D': 12,  # 车辆类型
-                'E': 12,  # 车辆分类
-                'F': 25,  # 常用公司
-                'G': 20,  # 备注
-                'H': 15,  # 供应商类型
-                'I': 12   # 状态
-            }
-            
-            for col, width in column_widths.items():
-                worksheet.column_dimensions[col].width = width
-            
-            # 设置标题行样式
-            from openpyxl.styles import Font, PatternFill, Alignment
-            
-            title_font = Font(bold=True, size=14)
-            header_font = Font(bold=True)
-            header_fill = PatternFill(start_color='E6F3FF', end_color='E6F3FF', fill_type='solid')
-            center_alignment = Alignment(horizontal='center', vertical='center')
-            
-            # 设置标题样式
-            worksheet['A1'].font = title_font
-            worksheet['A1'].alignment = center_alignment
-            
-            # 合并标题单元格
-            worksheet.merge_cells('A1:I1')
-            worksheet.merge_cells('A2:I2')
-            
-            # 设置表头样式
-            for col in range(1, 10):  # A到I列
-                cell = worksheet.cell(row=4, column=col)
-                cell.font = header_font
-                cell.fill = header_fill
-                cell.alignment = center_alignment
+        # 保存并关闭writer
+        writer.close()
         
         output.seek(0)
         return output.getvalue()
@@ -133,8 +135,8 @@ class ExcelProcessingService:
             Dict[str, Any]: 解析结果，包含success状态和data或error信息
         """
         try:
-            # 读取Excel文件
-            df = pd.read_excel(BytesIO(file_content), sheet_name=0, skiprows=3)
+            # 读取Excel文件（模板第一行为列名，不跳过行）
+            df = pd.read_excel(BytesIO(file_content), sheet_name=0)
             
             # 检查是否为空文件
             if df.empty:
@@ -144,12 +146,19 @@ class ExcelProcessingService:
                 }
             
             # 检查必要的列是否存在
-            required_columns = ['车牌号', '车厢号', '容积']
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            if missing_columns:
+            # 规则：必须包含“容积”，且“车牌号”和“车厢号”至少出现一个
+            required_volume_col = '容积'
+            has_license_col = '车牌号' in df.columns
+            has_carriage_col = '车厢号' in df.columns
+            if required_volume_col not in df.columns:
                 return {
                     'success': False,
-                    'error': f'缺少必要的列：{", ".join(missing_columns)}'
+                    'error': '缺少必要的列：容积'
+                }
+            if not (has_license_col or has_carriage_col):
+                return {
+                    'success': False,
+                    'error': '缺少必要的列：车牌号或车厢号（至少一个）'
                 }
             
             # 转换字段名
@@ -165,7 +174,7 @@ class ExcelProcessingService:
             filtered_records = []
             for record in records:
                 # 检查是否所有关键字段都为空
-                key_fields = ['license_plate', 'carriage_number', 'actual_volume']
+                key_fields = ['license_plate', 'carriage_number', 'standard_volume']
                 if any(cls._is_not_empty(record.get(field)) for field in key_fields):
                     filtered_records.append(record)
             
@@ -216,8 +225,8 @@ class ExcelProcessingService:
                 df_clean[field] = df_clean[field].replace('nan', '')
         
         # 处理数值字段
-        if 'actual_volume' in df_clean.columns:
-            df_clean['actual_volume'] = pd.to_numeric(df_clean['actual_volume'], errors='coerce')
+        if 'standard_volume' in df_clean.columns:
+            df_clean['standard_volume'] = pd.to_numeric(df_clean['standard_volume'], errors='coerce')
         
         return df_clean
     
@@ -290,7 +299,7 @@ class ExcelProcessingService:
                     '行号': result['row'],
                     '车牌号': result['original_data'].get('license_plate', ''),
                     '车厢号': result['original_data'].get('carriage_number', ''),
-                    '容积': result['original_data'].get('actual_volume', ''),
+                    '容积': result['original_data'].get('standard_volume', ''),
                     '错误信息': '; '.join(result['errors'])
                 }
                 report_data.append(row_data)

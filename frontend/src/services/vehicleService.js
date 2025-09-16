@@ -148,14 +148,32 @@ export const downloadImportTemplate = () => {
 /**
  * 预览导入数据
  * @param {FormData} formData - 包含Excel文件的表单数据
- * @returns {Promise} - 返回预览结果
+ * @returns {Promise} - 返回预览结果（统一成功判定：code=0）
  */
-export const previewImportData = (formData) => {
-  return apiClient.post('/vehicles/import/preview', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
+export const previewImportData = async (formData) => {
+  try {
+    const response = await apiClient.post('/vehicles/import/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    if (response.code === 0 || response.code === 200 || response.code === 201 || response.success) {
+      return {
+        code: 0,
+        message: response.message || '解析成功',
+        data: response.data || response
+      }
     }
-  });
+    return {
+      code: response.code || 1,
+      message: response.message || '文件解析失败',
+      data: null
+    }
+  } catch (error) {
+    return {
+      code: error.code || 500,
+      message: error.message || '网络错误',
+      data: null
+    }
+  }
 };
 
 /**
@@ -163,10 +181,30 @@ export const previewImportData = (formData) => {
  * @param {Object} importData - 导入数据
  * @param {Array} importData.validation_results - 验证结果列表
  * @param {string} importData.filename - 文件名
- * @returns {Promise} - 返回导入结果
+ * @returns {Promise} - 返回导入结果（统一成功判定：code=0）
  */
-export const executeImport = (importData) => {
-  return apiClient.post('/vehicles/import/execute', importData);
+export const executeImport = async (importData) => {
+  try {
+    const response = await apiClient.post('/vehicles/import/execute', importData)
+    if (response.code === 0 || response.code === 200 || response.code === 201 || response.success) {
+      return {
+        code: 0,
+        message: response.message || '导入完成',
+        data: response.data || response
+      }
+    }
+    return {
+      code: response.code || 1,
+      message: response.message || '导入失败',
+      data: null
+    }
+  } catch (error) {
+    return {
+      code: error.code || 500,
+      message: error.message || '网络错误',
+      data: null
+    }
+  }
 };
 
 /**

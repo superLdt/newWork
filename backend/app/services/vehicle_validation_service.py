@@ -33,8 +33,8 @@ class VehicleValidationService:
             errors.append('车牌号或车厢号至少需要填写一个')
         
         # 验证容积
-        actual_volume = data.get('actual_volume')
-        if not actual_volume or actual_volume <= 0:
+        standard_volume = data.get('standard_volume')
+        if not standard_volume or standard_volume <= 0:
             errors.append('容积必须大于0')
         
         # 验证车厢号格式（如果填写了车厢号且包含"挂"字）
@@ -109,7 +109,7 @@ class VehicleValidationService:
     @staticmethod
     def auto_set_category(data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        根据车厢号自动设置车辆分类
+        根据车厢号自动设置车辆分类，并基于容积推断车型与原始载重
         
         Args:
             data: 车辆数据字典
@@ -117,11 +117,22 @@ class VehicleValidationService:
         Returns:
             Dict[str, Any]: 更新后的车辆数据
         """
+        # 设置车辆分类
         carriage_number = data.get('carriage_number', '')
         if carriage_number and '挂' in carriage_number:
             data['vehicle_category'] = '挂车'
         else:
             data['vehicle_category'] = '单车'
+        
+        # 基于标准容积推断车型与原始载重（仅当未提供时）
+        standard_volume = data.get('standard_volume')
+        if standard_volume is not None and not data.get('vehicle_type'):
+            from app.services.vehicle.vehicle_capacity_reference_service import VehicleCapacityReferenceService
+            infer_result = VehicleCapacityReferenceService.infer_type_and_capacity(standard_volume)
+            if infer_result:
+                inferred_type, inferred_capacity = infer_result
+                data['vehicle_type'] = inferred_type
+                data['original_capacity'] = inferred_capacity
         
         return data
     
@@ -138,7 +149,10 @@ class VehicleValidationService:
         """
         errors = []
         
+        # 未提供或为空白，视为无公司，不报错
         if companies_data is None:
+            return errors
+        if isinstance(companies_data, str) and companies_data.strip() == '':
             return errors
         
         # 如果是字符串，尝试解析为JSON

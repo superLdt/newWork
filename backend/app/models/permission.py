@@ -80,6 +80,7 @@ class Permission(db.Model):
             
             # 基础数据权限
             {'name': '查看车辆', 'code': 'vehicle:read', 'description': '查看车辆列表和详情', 'resource_type': 'api', 'resource_id': '/vehicles', 'action': 'read'},
+            {'name': '创建车辆', 'code': 'vehicle:create', 'description': '创建车辆', 'resource_type': 'api', 'resource_id': '/vehicles', 'action': 'write'},
             {'name': '管理车辆', 'code': 'vehicle:manage', 'description': '创建、编辑、删除车辆', 'resource_type': 'api', 'resource_id': '/vehicles', 'action': 'write'},
             {'name': '查看司机', 'code': 'driver:read', 'description': '查看司机列表和详情', 'resource_type': 'api', 'resource_id': '/drivers', 'action': 'read'},
             {'name': '管理司机', 'code': 'driver:manage', 'description': '创建、编辑、删除司机', 'resource_type': 'api', 'resource_id': '/drivers', 'action': 'write'},
