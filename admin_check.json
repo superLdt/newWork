@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿{
     "user_roles":  "超级管理员",
     "is_admin_claim":  null,
@@ -13,3 +14,20 @@
 
                                }
 }
+=======
+﻿{
+    "user_roles":  "超级管理员",
+    "is_admin_claim":  null,
+    "total_permissions":  24,
+    "admin_role_id":  null,
+    "admin_permissions_count":  0,
+    "admin_has_all_permissions":  true,
+    "permissions_missing_in_admin":  null,
+    "admin_menu_count":  12,
+    "all_menu_count":  12,
+    "admin_has_all_menus":  true,
+    "menus_missing_in_admin":  {
+
+                               }
+}
+>>>>>>> e399a645b246d3136fc10af9b241795e7de2acd3

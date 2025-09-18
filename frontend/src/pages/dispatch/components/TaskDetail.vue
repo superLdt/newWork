@@ -370,20 +370,20 @@ export default {
       ],
       // 班组长在“待班组派车”时进行派车（复用响应表单）
       '班组长': [
-      -        { key: 'respond', label: '派遣车辆', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      -        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       +        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       ],
       team_leader: [
-      -        { key: 'respond', label: '派遣车辆', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      -        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       +        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       ],
-      // 外包管理公司在“待班组派车”时进行外包派车（复用响应表单）
+      // 大容积供应商在“待班组派车”时进行大容积派车（复用响应表单）
       '外包管理公司': [
-      -        { key: 'respond', label: '外包派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      -        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       +        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       ],
       outsourcing_manager: [
-      -        { key: 'respond', label: '外包派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      -        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       +        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       ]
     }
@@ -472,12 +472,12 @@ export default {
           workshop_dispatcher: '等待供应商响应'
         },
         awaiting_team_assignment: {
-          '超级管理员': '等待班组或外包公司派车',
-          '区域调度员': '等待班组或外包公司派车',
-          '车间地调': '等待班组或外包公司派车',
-          '供应商': '等待班组或外包公司派车',
+          '超级管理员': '等待班组或大容积供应商派车',
+          '区域调度员': '等待班组或大容积供应商派车',
+          '车间地调': '等待班组或大容积供应商派车',
+          '供应商': '等待班组或大容积供应商派车',
           '班组长': '请派遣自办车辆',
-          '外包管理公司': '请派遣外包车辆',
+          '外包管理公司': '请派遣大容积车辆',
           regional_dispatcher: '等待班组派车',
           supplier: '等待班组派车',
           team_leader: '请派遣车辆',

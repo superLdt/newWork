@@ -155,7 +155,7 @@
               <el-select v-model="vehicleForm.suppliers" placeholder="请选择供应商类型" style="width: 100%">
                 <el-option label="内部单位" value="内部单位"></el-option>
                 <el-option label="供应商" value="供应商"></el-option>
-                <el-option label="外包驾驶管理公司" value="外包驾驶管理公司"></el-option>
+                <el-option label="大容积供应商" value="外包驾驶管理公司"></el-option>
               </el-select>
             </el-form-item>
           </el-col>

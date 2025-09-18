@@ -368,7 +368,7 @@ export const dispatchService = {
   },
 
   /**
-   * 提交外包管理公司响应
+   * 提交大容积供应商响应
    * @param {Object} responseData - 响应数据
    * @returns {Promise} - 返回响应结果
    */
@@ -387,15 +387,15 @@ export const dispatchService = {
       ) {
         return {
           code: 0,
-          message: data.message || '外包响应提交成功',
+          message: data.message || '大容积响应提交成功',
           data: data.data !== undefined ? data.data : data
         }
       }
       
       // 未识别为成功，抛出错误
-      throw new Error(data?.message || '外包响应提交失败')
+      throw new Error(data?.message || '大容积响应提交失败')
     } catch (error) {
-      console.error('提交外包管理公司响应失败:', error)
+      console.error('提交大容积供应商响应失败:', error)
       throw error
     }
   }

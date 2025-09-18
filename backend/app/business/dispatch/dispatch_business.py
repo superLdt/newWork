@@ -62,25 +62,11 @@ class DispatchBusiness:
             if not vehicle.get('license_plate'):
                 return DispatchBusiness._error(f'第{i+1}辆车的车牌号不能为空')
             
-            # 司机信息必填
-            if not vehicle.get('driver_name'):
-                return DispatchBusiness._error(f'第{i+1}辆车的司机姓名不能为空')
-            
-            if not vehicle.get('driver_phone'):
-                return DispatchBusiness._error(f'第{i+1}辆车的司机电话不能为空')
-            
             # 车辆类型必填
             if not vehicle.get('vehicle_type'):
-                return DispatchBusiness._error(f'第{i+1}辆车的车型不能为空')
-            
-            # 载重量和容积必填且大于0
-            if not vehicle.get('load_capacity') or vehicle.get('load_capacity', 0) <= 0:
-                return DispatchBusiness._error(f'第{i+1}辆车的载重量必须大于0')
-            
-            if not vehicle.get('actual_volume') or vehicle.get('actual_volume', 0) <= 0:
-                return DispatchBusiness._error(f'第{i+1}辆车的实际容积必须大于0')
+                return DispatchBusiness._error(f'第{i+1}辆车的车辆类型不能为空')
         
-        return DispatchBusiness._ok('数据验证通过')
+        return {'valid': True, 'message': '数据验证通过'}
     
     @staticmethod
     def validate_team_response_data(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -147,19 +133,14 @@ class DispatchBusiness:
                     dispatch_number=data['dispatch_number'],
                     license_plate=vehicle_data['license_plate'],
                     carriage_number=vehicle_data.get('carriage_number', ''),
-                    vehicle_type=vehicle_data['vehicle_type'],
-                    actual_volume=vehicle_data['actual_volume'],
+                    vehicle_type=vehicle_data.get('vehicle_type', ''),
+                    vehicle_category=vehicle_data.get('vehicle_category', ''),
+                    # 使用VehicleCapacityReference的字段
+                    actual_volume=vehicle_data.get('standard_volume', 0),  # 使用标准容积作为实际容积
+                    original_capacity=vehicle_data.get('original_capacity', 0),
                     notes=data.get('notes', ''),
                     supplier_type='供应商'
                 )
-                
-                # 添加司机信息等其他字段
-                if hasattr(vehicle, 'driver_name'):
-                    vehicle.driver_name = vehicle_data['driver_name']
-                if hasattr(vehicle, 'driver_phone'):
-                    vehicle.driver_phone = vehicle_data['driver_phone']
-                if hasattr(vehicle, 'load_capacity'):
-                    vehicle.load_capacity = vehicle_data['load_capacity']
                 
                 db.session.add(vehicle)
             
@@ -226,19 +207,14 @@ class DispatchBusiness:
                     dispatch_number=data['dispatch_number'],
                     license_plate=vehicle_data['license_plate'],
                     carriage_number=vehicle_data.get('carriage_number', ''),
-                    vehicle_type=vehicle_data['vehicle_type'],
-                    actual_volume=vehicle_data['actual_volume'],
+                    vehicle_type=vehicle_data.get('vehicle_type', ''),
+                    vehicle_category=vehicle_data.get('vehicle_category', ''),
+                    # 使用VehicleCapacityReference的字段
+                    actual_volume=vehicle_data.get('standard_volume', 0),  # 使用标准容积作为实际容积
+                    original_capacity=vehicle_data.get('original_capacity', 0),
                     notes=data.get('notes', ''),
                     supplier_type='班组'
                 )
-                
-                # 添加司机信息等其他字段
-                if hasattr(vehicle, 'driver_name'):
-                    vehicle.driver_name = vehicle_data['driver_name']
-                if hasattr(vehicle, 'driver_phone'):
-                    vehicle.driver_phone = vehicle_data['driver_phone']
-                if hasattr(vehicle, 'load_capacity'):
-                    vehicle.load_capacity = vehicle_data['load_capacity']
                 
                 db.session.add(vehicle)
             
@@ -305,19 +281,14 @@ class DispatchBusiness:
                     dispatch_number=data['dispatch_number'],
                     license_plate=vehicle_data['license_plate'],
                     carriage_number=vehicle_data.get('carriage_number', ''),
-                    vehicle_type=vehicle_data['vehicle_type'],
-                    actual_volume=vehicle_data['actual_volume'],
+                    vehicle_type=vehicle_data.get('vehicle_type', ''),
+                    vehicle_category=vehicle_data.get('vehicle_category', ''),
+                    # 使用VehicleCapacityReference的字段
+                    actual_volume=vehicle_data.get('standard_volume', 0),  # 使用标准容积作为实际容积
+                    original_capacity=vehicle_data.get('original_capacity', 0),
                     notes=data.get('notes', ''),
                     supplier_type='外包管理公司'
                 )
-                
-                # 添加司机信息等其他字段
-                if hasattr(vehicle, 'driver_name'):
-                    vehicle.driver_name = vehicle_data['driver_name']
-                if hasattr(vehicle, 'driver_phone'):
-                    vehicle.driver_phone = vehicle_data['driver_phone']
-                if hasattr(vehicle, 'load_capacity'):
-                    vehicle.load_capacity = vehicle_data['load_capacity']
                 
                 db.session.add(vehicle)
             

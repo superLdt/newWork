@@ -47,13 +47,13 @@
           label-width="120px"
           label-position="right"
         >
-          <!-- 必填字段：货票号和派车单号 -->
+          <!-- 必填字段：路单流水号和派车单号 -->
           <el-row :gutter="20">
             <el-col :span="12">
-              <el-form-item label="货票号" prop="manifest_number">
+              <el-form-item label="路单流水号" prop="manifest_number">
                 <el-input 
                   v-model="responseForm.manifest_number" 
-                  placeholder="请输入货票号"
+                  placeholder="请输入路单流水号"
                   clearable
                 />
               </el-form-item>
@@ -75,40 +75,142 @@
             车辆信息
           </el-divider>
 
-          <!-- 车辆选择（表格多选 + 过滤） -->
-          <div class="vehicle-select">
-            <el-row :gutter="12" class="vehicle-filter">
-              <el-col :span="18">
-                <el-input v-model="vehicleFilter" placeholder="按车牌号/司机姓名搜索可用车辆" clearable />
+          <!-- 车辆选择（左右分栏布局） -->
+          <div class="vehicle-selection-container">
+            <el-row :gutter="20">
+              <!-- 左侧：车辆信息表格 -->
+              <el-col :span="14">
+                <el-card class="vehicle-table-card" shadow="never">
+                  <template #header>
+                    <div class="card-header">
+                      <h4>可用车辆列表</h4>
+                      <div class="header-actions">
+                        <el-input
+                          v-model="vehicleFilter"
+                          placeholder="搜索车牌号/车厢号/车型"
+                          clearable
+                          style="width: 200px; margin-right: 10px;"
+                        >
+                          <template #prefix>
+                            <el-icon><Search /></el-icon>
+                          </template>
+                        </el-input>
+                        <el-button :loading="loadingVehicles" @click="fetchAvailableVehicles">
+                          <el-icon><Refresh /></el-icon>
+                        </el-button>
+                      </div>
+                    </div>
+                  </template>
+
+                  <el-table
+                    :data="filteredVehicles"
+                    v-loading="loadingVehicles"
+                    border
+                    height="400"
+                    @row-click="handleRowClick"
+                    row-class-name="clickable-row"
+                  >
+                    <el-table-column prop="license_plate" label="车牌号" width="120" />
+                    <el-table-column prop="carriage_number" label="车厢号" width="120" />
+                    <el-table-column prop="vehicle_type" label="车型" width="100" />
+                    <el-table-column prop="vehicle_category" label="分类" width="80" />
+                    <el-table-column prop="standard_volume" label="容积(m³)" width="100">
+                      <template #default="scope">{{ scope.row.standard_volume ?? '-' }}</template>
+                    </el-table-column>
+                    <el-table-column prop="original_capacity" label="载重(吨)" width="100">
+                      <template #default="scope">{{ scope.row.original_capacity ?? '-' }}</template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="80" fixed="right">
+                      <template #default="scope">
+                        <el-button
+                          type="primary"
+                          size="small"
+                          @click.stop="addVehicle(scope.row)"
+                          :disabled="isVehicleSelected(scope.row.id)"
+                        >
+                          <el-icon><Plus /></el-icon>
+                        </el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+
+                  <div class="table-footer">
+                    <span>共 {{ filteredVehicles.length }} 辆可用车辆</span>
+                  </div>
+                </el-card>
               </el-col>
-              <el-col :span="6" style="text-align:right;">
-                <el-button :loading="loadingVehicles" @click="fetchAvailableVehicles">刷新列表</el-button>
+
+              <!-- 右侧：选中车辆容器 -->
+              <el-col :span="10">
+                <el-card class="selected-vehicles-card" shadow="never">
+                  <template #header>
+                    <div class="card-header">
+                      <h4>已选车辆</h4>
+                      <el-tag type="primary">{{ selectedVehicles.length }} 辆</el-tag>
+                    </div>
+                  </template>
+
+                  <div class="selected-vehicles-container">
+                    <div v-if="selectedVehicles.length === 0" class="empty-state">
+                      <el-empty description="暂未选择车辆" :image-size="80">
+                        <template #image>
+                          <el-icon size="60" color="#c0c4cc"><Van /></el-icon>
+                        </template>
+                      </el-empty>
+                    </div>
+
+                    <div v-else class="selected-vehicles-list">
+                      <div
+                        v-for="vehicle in selectedVehicles"
+                        :key="vehicle.id"
+                        class="selected-vehicle-item"
+                      >
+                        <div class="vehicle-info">
+                          <div class="vehicle-main">
+                            <span class="license-plate">{{ vehicle.license_plate }}</span>
+                            <span class="vehicle-type">{{ vehicle.vehicle_type }}</span>
+                          </div>
+                          <div class="vehicle-details">
+                            <span class="detail-item">
+                              <el-icon><Box /></el-icon>
+                              {{ vehicle.carriage_number || '无车厢号' }}
+                            </span>
+                            <span class="detail-item">
+                              <el-icon><ScaleToOriginal /></el-icon>
+                              {{ vehicle.standard_volume ?? '-' }}m³
+                            </span>
+                            <span class="detail-item">
+                              <el-icon><Van /></el-icon>
+                              {{ vehicle.original_capacity ?? '-' }}吨
+                            </span>
+                          </div>
+                        </div>
+                        <div class="vehicle-actions">
+                          <el-button
+                            type="danger"
+                            size="small"
+                            @click="removeVehicle(vehicle.id)"
+                            circle
+                          >
+                            <el-icon><Delete /></el-icon>
+                          </el-button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="selection-actions" v-if="selectedVehicles.length > 0">
+                    <el-button
+                      size="small"
+                      @click="clearSelection"
+                    >
+                      <el-icon><Close /></el-icon>
+                      清空选择
+                    </el-button>
+                  </div>
+                </el-card>
               </el-col>
             </el-row>
-
-            <el-table
-              :data="filteredVehicles"
-              v-loading="loadingVehicles"
-              border
-              height="360"
-              @selection-change="rows => { selectedVehicles = rows; mapSelectedToPayload(); }"
-            >
-              <el-table-column type="selection" width="55" />
-              <el-table-column prop="plate_number" label="车牌号" width="140" />
-              <el-table-column prop="driver_name" label="司机" width="120" />
-              <el-table-column prop="driver_phone" label="电话" width="140" />
-              <el-table-column prop="vehicle_type" label="车型" width="120" />
-              <el-table-column prop="capacity" label="载重(吨)" width="120">
-                <template #default="scope">{{ scope.row.capacity ?? '-' }}</template>
-              </el-table-column>
-              <el-table-column prop="volume" label="容积(m³)" width="120">
-                <template #default="scope">{{ scope.row.volume ?? '-' }}</template>
-              </el-table-column>
-            </el-table>
-
-            <div style="margin-top:8px; text-align:right; color:#909399;">
-              已选择 {{ selectedVehicles.length }} 辆车辆
-            </div>
           </div>
 
           <!-- 响应备注 -->
@@ -155,11 +257,16 @@ import {
   Plus, 
   Delete, 
   Check, 
-  Close 
+  Close,
+  Search,
+  Refresh,
+  Box,
+  ScaleToOriginal
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
 import { dispatchService } from '@/services/dispatchService'
+import { vehicleCapacityReferenceService } from '@/services/vehicleCapacityReferenceService'
 
 export default {
   name: 'SupplierResponseForm',
@@ -168,7 +275,11 @@ export default {
     Plus,
     Delete,
     Check,
-    Close
+    Close,
+    Search,
+    Refresh,
+    Box,
+    ScaleToOriginal,
   },
   props: {
     task: {
@@ -197,17 +308,12 @@ export default {
       const neededPerms = ['supplier:respond', 'team:assign', 'outsourcing:assign']
       if (neededPerms.some(p => hasPerm(p))) return true
 
-      // 2) 若权限列表未加载（为空），按角色兜底放行，避免联调受阻
-      const perms = permissionStore.permissions || []
-      const skipStrict = !Array.isArray(perms) || perms.length === 0
-      if (!skipStrict) return false
-
-      // 3) 角色兜底（从 permissionStore -> userStore 依次获取）
+      // 2) 角色兜底（从 permissionStore -> userStore 依次获取），不再因“已加载但缺少权限码”而直接拦截
       let derivedRole = ''
       const info = permissionStore.userInfo
       if (info && Array.isArray(info.roles) && info.roles.length > 0) {
-        // 后端返回的角色对象数组 [{ id, name }, ...]
-        derivedRole = info.roles[0]?.name || ''
+        const first = info.roles[0]
+        derivedRole = typeof first === 'string' ? first : (first?.name || '')
       } else if (Array.isArray(permissionStore.roles) && permissionStore.roles.length > 0) {
         // permissionStore 中已展开的角色名数组 ["供应商", ...]
         derivedRole = permissionStore.roles[0]
@@ -216,7 +322,7 @@ export default {
         derivedRole = userStore.currentUser.role_name
       }
 
-      const allowedRoles = ['供应商', '班组长', '外包管理公司', 'supplier', 'team_leader', 'outsourcing_manager']
+      const allowedRoles = ['供应商', '班组长', '外包管理公司', '外包驾驶管理公司', '大容积供应商', 'supplier', 'team_leader', 'outsourcing_manager']
       return allowedRoles.includes(derivedRole)
     })
 
@@ -232,7 +338,7 @@ export default {
     // 表单验证规则
     const responseRules = {
       manifest_number: [
-        { required: true, message: '请输入货票号', trigger: 'blur' }
+        { required: true, message: '请输入路单流水号', trigger: 'blur' }
       ],
       dispatch_number: [
         { required: true, message: '请输入派车单号', trigger: 'blur' }
@@ -250,8 +356,9 @@ export default {
       if (!vehicleFilter.value) return allVehicles.value
       const keyword = vehicleFilter.value.toLowerCase()
       return allVehicles.value.filter(v => (
-        (v.plate_number || '').toLowerCase().includes(keyword) ||
-        (v.driver_name || '').toLowerCase().includes(keyword)
+        (v.license_plate || '').toLowerCase().includes(keyword) ||
+        (v.carriage_number || '').toLowerCase().includes(keyword) ||
+        (v.vehicle_type || '').toLowerCase().includes(keyword)
       ))
     })
 
@@ -308,7 +415,48 @@ export default {
             ElMessage.warning(`车辆总容积(${totalVolume}m³)小于任务需求(${props.task.actual_volume}m³)，请确认是否继续提交`)
           }
 
-          const userRole = userStore.currentUser?.role_name
+          // 优先根据权限码确定提交通道；若权限未初始化则根据角色名称兜底
+          const checkPerm = permissionStore.hasPermission
+          const hasPerm = (code) => (typeof checkPerm === 'function' ? checkPerm(code) : (checkPerm?.(code) || false))
+
+          // 从权限或角色推导提交类型：supplier/team/outsourcing
+          const resolveSubmitType = () => {
+            // 1) 权限优先
+            if (hasPerm('supplier:respond')) return 'supplier'
+            if (hasPerm('team:assign')) return 'team'
+            if (hasPerm('outsourcing:assign')) return 'outsourcing'
+
+            // 2) 若权限不足，则基于角色兜底（兼容字符串或对象 roles）
+            let roleName = ''
+            const info = permissionStore.userInfo
+            if (info && Array.isArray(info.roles) && info.roles.length > 0) {
+              const first = info.roles[0]
+              roleName = typeof first === 'string' ? first : (first?.name || '')
+            } else if (Array.isArray(permissionStore.roles) && permissionStore.roles.length > 0) {
+              roleName = permissionStore.roles[0]
+            } else if (userStore?.currentUser?.role_name) {
+              roleName = userStore.currentUser.role_name
+            }
+
+            // 兼容英文 key 与中文名称，以及“大容积供应商/外包驾驶管理公司”展示名
+            if (['供应商', 'supplier'].includes(roleName)) return 'supplier'
+            if (['班组长', 'team_leader'].includes(roleName)) return 'team'
+            if (['外包管理公司', '外包驾驶管理公司', '大容积供应商', 'outsourcing_manager'].includes(roleName)) return 'outsourcing'
+
+            // 3) 再次兜底：根据任务状态推断（防止因角色字符串差异而阻塞）
+            const status = props.task?.status
+            if (status === 'awaiting_supplier_response' || status === 'approved') return 'supplier'
+            if (status === 'awaiting_team_assignment') {
+              // 若角色疑似大容积/外包，则走 outsourcing，否则默认走 team
+              if (['外包管理公司', '外包驾驶管理公司', '大容积供应商', 'outsourcing_manager'].includes(roleName)) return 'outsourcing'
+              return 'team'
+            }
+
+            return ''
+          }
+
+          const submitType = resolveSubmitType()
+
           const requestData = {
             task_id: responseForm.task_id,
             manifest_number: responseForm.manifest_number,
@@ -318,11 +466,11 @@ export default {
           }
 
           let result
-          if (userRole === '供应商' || userRole === 'supplier') {
+          if (submitType === 'supplier') {
             result = await dispatchService.submitSupplierResponse(requestData)
-          } else if (userRole === '班组长' || userRole === 'team_leader') {
+          } else if (submitType === 'team') {
             result = await dispatchService.submitTeamResponse(requestData)
-          } else if (userRole === '外包管理公司' || userRole === 'outsourcing_manager') {
+          } else if (submitType === 'outsourcing') {
             result = await dispatchService.submitOutsourcingResponse(requestData)
           } else {
             throw new Error('当前角色无权限进行此操作')
@@ -344,20 +492,77 @@ export default {
     // 取消
     const cancel = () => emit('cancel')
 
+    // 处理表格行点击
+    const handleRowClick = (row) => {
+      if (!isVehicleSelected(row.id)) {
+        addVehicle(row)
+      }
+    }
+
+    // 添加车辆到选中列表
+    const addVehicle = (vehicle) => {
+      if (isVehicleSelected(vehicle.id)) {
+        ElMessage.warning('该车辆已被选择')
+        return
+      }
+      
+      selectedVehicles.value.push({ ...vehicle })
+      mapSelectedToPayload()
+      ElMessage.success(`已添加车辆：${vehicle.license_plate}`)
+    }
+
+    // 从选中列表移除车辆
+    const removeVehicle = (vehicleId) => {
+      const index = selectedVehicles.value.findIndex(v => v.id === vehicleId)
+      if (index > -1) {
+        const vehicle = selectedVehicles.value[index]
+        selectedVehicles.value.splice(index, 1)
+        mapSelectedToPayload()
+        ElMessage.success(`已移除车辆：${vehicle.license_plate}`)
+      }
+    }
+
+    // 检查车辆是否已被选择
+    const isVehicleSelected = (vehicleId) => {
+      return selectedVehicles.value.some(v => v.id === vehicleId)
+    }
+
+    // 清空选择
+    const clearSelection = async () => {
+      if (selectedVehicles.value.length === 0) return
+      
+      try {
+        await ElMessageBox.confirm(
+          '确认清空所有已选择的车辆吗？',
+          '确认清空',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        selectedVehicles.value = []
+        mapSelectedToPayload()
+        ElMessage.success('已清空选择')
+      } catch {
+        // 用户取消操作
+      }
+    }
+
     // 将选择映射为提交 payload 所需字段
     const mapSelectedToPayload = () => {
       responseForm.vehicles = (selectedVehicles.value || []).map(v => ({
-        license_plate: v.plate_number,
+        license_plate: v.license_plate,
         carriage_number: v.carriage_number || '',
-        driver_name: v.driver_name,
-        driver_phone: v.driver_phone,
         vehicle_type: v.vehicle_type,
-        load_capacity: v.capacity,
-        actual_volume: v.volume
+        vehicle_category: v.vehicle_category,
+        standard_volume: v.standard_volume,
+        original_capacity: v.original_capacity,
+        suppliers: v.suppliers
       }))
     }
 
-    // 获取可用车辆
+    // 获取可用车辆（使用VehicleCapacityReference接口）
     const fetchAvailableVehicles = async () => {
       loadingVehicles.value = true
       try {
@@ -366,7 +571,7 @@ export default {
           allVehicles.value = []
           return
         }
-        const result = await dispatchService.getAvailableVehicles()
+        const result = await vehicleCapacityReferenceService.getAvailableVehicles()
         allVehicles.value = result.data || []
       } catch (e) {
         console.error('获取可用车辆失败:', e)
@@ -388,7 +593,6 @@ export default {
       hasResponsePermission,
       responseForm,
       responseRules,
-      // 移除旧的 vehicleRules & 手动添加删除逻辑，不再暴露
       getStatusType,
       getStatusText,
       // 新增：选择相关
@@ -397,6 +601,11 @@ export default {
       vehicleFilter,
       filteredVehicles,
       selectedVehicles,
+      handleRowClick,
+      addVehicle,
+      removeVehicle,
+      isVehicleSelected,
+      clearSelection,
       mapSelectedToPayload,
       fetchAvailableVehicles,
       // 提交/取消
@@ -512,5 +721,179 @@ export default {
 
 .el-button--primary:hover {
   background: linear-gradient(135deg, #66b1ff 0%, #40a9ff 100%);
+}
+
+/* 车辆选择容器样式 */
+.vehicle-selection-container {
+  margin: 20px 0;
+}
+
+.vehicle-table-card,
+.selected-vehicles-card {
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.vehicle-table-card :deep(.el-card__body),
+.selected-vehicles-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-header h4 {
+  margin: 0;
+  color: #303133;
+  font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.table-footer {
+  margin-top: 12px;
+  text-align: right;
+  color: #909399;
+  font-size: 14px;
+}
+
+/* 选中车辆容器样式 */
+.selected-vehicles-container {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 16px;
+}
+
+.empty-state {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.selected-vehicles-list {
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.selected-vehicle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  background: #fafafa;
+  transition: all 0.3s;
+}
+
+.selected-vehicle-item:hover {
+  border-color: #409eff;
+  background: #f0f9ff;
+}
+
+.vehicle-info {
+  flex: 1;
+}
+
+.vehicle-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.license-plate {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+}
+
+.vehicle-type {
+  background: #e1f3d8;
+  color: #67c23a;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.vehicle-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #606266;
+  font-size: 12px;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vehicle-actions {
+  margin-left: 12px;
+}
+
+.selection-actions {
+  padding-top: 12px;
+  border-top: 1px solid #e4e7ed;
+  text-align: center;
+}
+
+/* 表格行点击样式 */
+:deep(.clickable-row) {
+  cursor: pointer;
+}
+
+:deep(.clickable-row:hover) {
+  background-color: #f5f7fa;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .vehicle-selection-container :deep(.el-row) {
+    flex-direction: column;
+  }
+  
+  .vehicle-selection-container :deep(.el-col) {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+  
+  .vehicle-table-card,
+  .selected-vehicles-card {
+    height: auto;
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .header-actions .el-input {
+    width: 100% !important;
+    margin-right: 0 !important;
+  }
+  
+  .vehicle-details {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 </style>

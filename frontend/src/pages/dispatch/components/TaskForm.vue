@@ -231,7 +231,7 @@ export default {
          const currentUnit = dispatchUnits.value.find(unit => unit.id === formData.organizing_unit_id)
          if (currentUnit) {
            if (value === '自办派车') {
-             // 自办派车只能选择内部单位或外包驾驶管理公司
+             // 自办派车只能选择内部单位或大容积供应商
              if (currentUnit.unit_type !== '内部单位' && currentUnit.unit_type !== '外包驾驶管理公司') {
                formData.organizing_unit_id = null
                formData.organizing_unit = ''
@@ -281,7 +281,7 @@ export default {
     // 根据业务类型过滤组开单位
      const filteredDispatchUnits = computed(() => {
        if (formData.business_type === '自办派车') {
-         // 自办派车只显示内部单位或外包驾驶管理公司
+         // 自办派车只显示内部单位或大容积供应商
          return dispatchUnits.value.filter(unit => 
            unit.unit_type === '内部单位' || unit.unit_type === '外包驾驶管理公司'
          )

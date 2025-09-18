@@ -43,3 +43,58 @@ class Vehicle(db.Model):
     
     def __repr__(self):
         return f'<Vehicle {self.license_plate}: {self.manifest_number}>'
+    
+    def to_dict(self):
+        """
+        将车辆对象转换为字典格式
+        Returns:
+            dict: 包含车辆信息的字典
+        """
+        # 解析常用公司列表
+        frequent_companies_list = []
+        if self.frequent_companies:
+            try:
+                frequent_companies_list = json.loads(self.frequent_companies)
+            except (json.JSONDecodeError, TypeError):
+                frequent_companies_list = []
+        
+        return {
+            'id': self.id,
+            'task_id': self.task_id,
+            'manifest_number': self.manifest_number,
+            'dispatch_number': self.dispatch_number,
+            'license_plate': self.license_plate,
+            'plate_number': self.license_plate,  # 兼容前端字段名
+            'carriage_number': self.carriage_number,
+            'vehicle_type': self.vehicle_type,
+            'vehicle_category': self.vehicle_category,
+            'frequent_companies': frequent_companies_list,
+            'status': self.status,
+            'notes': self.notes,
+            'actual_volume': self.actual_volume,
+            'volume_photo_url': self.volume_photo_url,
+            'volume_modified_by': self.volume_modified_by,
+            'required_volume': self.required_volume,
+            'confirmed_volume': self.confirmed_volume,
+            'supplier_id': self.supplier_id,
+            'supplier_type': self.supplier_type,
+            'confirmed_by': self.confirmed_by,
+            'confirmed_at': self.confirmed_at,
+            'is_merged': self.is_merged,
+            'is_downgraded': self.is_downgraded,
+            'original_capacity': self.original_capacity,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at
+        }
+    
+    @classmethod
+    def get_vehicle_type_choices(cls):
+        """
+        获取车辆类型选项列表
+        Returns:
+            list: 车辆类型选项列表
+        """
+        return [
+            '5吨', '8吨', '12吨', '20吨', 
+            '30吨', '40吨A', '40吨B'
+        ]

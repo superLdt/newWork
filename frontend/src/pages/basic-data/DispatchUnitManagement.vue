@@ -32,7 +32,7 @@
           <el-option label="全部" value=""></el-option>
           <el-option label="供应商" value="供应商"></el-option>
           <el-option label="内部单位" value="内部单位"></el-option>
-          <el-option label="外包驾驶管理公司" value="外包驾驶管理公司"></el-option>
+          <el-option label="大容积供应商" value="外包驾驶管理公司"></el-option>
         </el-select>
       </div>
       
@@ -46,7 +46,7 @@
         <el-table-column prop="unit_type" label="单位类型" width="120">
           <template #default="scope">
             <el-tag :type="scope.row.unit_type === '供应商' ? 'success' : 'info'">
-              {{ scope.row.unit_type || '未设置' }}
+              {{ scope.row.unit_type === '外包驾驶管理公司' ? '大容积供应商' : (scope.row.unit_type || '未设置') }}
             </el-tag>
           </template>
         </el-table-column>
@@ -113,7 +113,7 @@
               <el-select v-model="unitForm.unit_type" placeholder="请选择单位类型" style="width: 100%">
                 <el-option label="供应商" value="供应商"></el-option>
                 <el-option label="内部单位" value="内部单位"></el-option>
-                <el-option label="外包驾驶管理公司" value="外包驾驶管理公司"></el-option>
+                <el-option label="大容积供应商" value="外包驾驶管理公司"></el-option>
               </el-select>
             </el-form-item>
           </el-col>

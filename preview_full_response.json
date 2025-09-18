@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿{
     "code":  200,
     "data":  {
@@ -170,3 +171,177 @@
              },
     "message":  "操作成功"
 }
+=======
+﻿{
+    "code":  200,
+    "data":  {
+                 "preview_data":  [
+                                      {
+                                          "errors":  [
+
+                                                     ],
+                                          "original_data":  {
+                                                                "carriage_number":  "",
+                                                                "license_plate":  "皖B56620",
+                                                                "standard_volume":  64.56
+                                                            },
+                                          "processed_data":  {
+                                                                 "carriage_number":  "",
+                                                                 "frequent_companies":  "[]",
+                                                                 "license_plate":  "皖B56620",
+                                                                 "standard_volume":  64.56,
+                                                                 "vehicle_category":  "单车"
+                                                             },
+                                          "row":  1,
+                                          "valid":  true
+                                      },
+                                      {
+                                          "errors":  [
+
+                                                     ],
+                                          "original_data":  {
+                                                                "carriage_number":  "京B67890挂",
+                                                                "license_plate":  "京A12345",
+                                                                "standard_volume":  131.72
+                                                            },
+                                          "processed_data":  {
+                                                                 "carriage_number":  "京B67890挂",
+                                                                 "frequent_companies":  "[]",
+                                                                 "license_plate":  "京A12345",
+                                                                 "standard_volume":  131.72,
+                                                                 "vehicle_category":  "挂车"
+                                                             },
+                                          "row":  2,
+                                          "valid":  true
+                                      },
+                                      {
+                                          "errors":  [
+
+                                                     ],
+                                          "original_data":  {
+                                                                "carriage_number":  "",
+                                                                "license_plate":  "沪C67890",
+                                                                "standard_volume":  45.8
+                                                            },
+                                          "processed_data":  {
+                                                                 "carriage_number":  "",
+                                                                 "frequent_companies":  "[]",
+                                                                 "license_plate":  "沪C67890",
+                                                                 "standard_volume":  45.8,
+                                                                 "vehicle_category":  "单车"
+                                                             },
+                                          "row":  3,
+                                          "valid":  true
+                                      },
+                                      {
+                                          "errors":  [
+
+                                                     ],
+                                          "original_data":  {
+                                                                "carriage_number":  "粤B99999挂",
+                                                                "license_plate":  "粤B88888",
+                                                                "standard_volume":  185.5
+                                                            },
+                                          "processed_data":  {
+                                                                 "carriage_number":  "粤B99999挂",
+                                                                 "frequent_companies":  "[]",
+                                                                 "license_plate":  "粤B88888",
+                                                                 "standard_volume":  185.5,
+                                                                 "vehicle_category":  "挂车"
+                                                             },
+                                          "row":  4,
+                                          "valid":  true
+                                      }
+                                  ],
+                 "summary":  {
+                                 "error_types":  {
+
+                                                 },
+                                 "invalid_count":  0,
+                                 "total_count":  4,
+                                 "valid_count":  4,
+                                 "valid_rate":  100.0
+                             },
+                 "total_rows":  4,
+                 "validation_results":  [
+                                            {
+                                                "errors":  [
+
+                                                           ],
+                                                "original_data":  {
+                                                                      "carriage_number":  "",
+                                                                      "license_plate":  "皖B56620",
+                                                                      "standard_volume":  64.56
+                                                                  },
+                                                "processed_data":  {
+                                                                       "carriage_number":  "",
+                                                                       "frequent_companies":  "[]",
+                                                                       "license_plate":  "皖B56620",
+                                                                       "standard_volume":  64.56,
+                                                                       "vehicle_category":  "单车"
+                                                                   },
+                                                "row":  1,
+                                                "valid":  true
+                                            },
+                                            {
+                                                "errors":  [
+
+                                                           ],
+                                                "original_data":  {
+                                                                      "carriage_number":  "京B67890挂",
+                                                                      "license_plate":  "京A12345",
+                                                                      "standard_volume":  131.72
+                                                                  },
+                                                "processed_data":  {
+                                                                       "carriage_number":  "京B67890挂",
+                                                                       "frequent_companies":  "[]",
+                                                                       "license_plate":  "京A12345",
+                                                                       "standard_volume":  131.72,
+                                                                       "vehicle_category":  "挂车"
+                                                                   },
+                                                "row":  2,
+                                                "valid":  true
+                                            },
+                                            {
+                                                "errors":  [
+
+                                                           ],
+                                                "original_data":  {
+                                                                      "carriage_number":  "",
+                                                                      "license_plate":  "沪C67890",
+                                                                      "standard_volume":  45.8
+                                                                  },
+                                                "processed_data":  {
+                                                                       "carriage_number":  "",
+                                                                       "frequent_companies":  "[]",
+                                                                       "license_plate":  "沪C67890",
+                                                                       "standard_volume":  45.8,
+                                                                       "vehicle_category":  "单车"
+                                                                   },
+                                                "row":  3,
+                                                "valid":  true
+                                            },
+                                            {
+                                                "errors":  [
+
+                                                           ],
+                                                "original_data":  {
+                                                                      "carriage_number":  "粤B99999挂",
+                                                                      "license_plate":  "粤B88888",
+                                                                      "standard_volume":  185.5
+                                                                  },
+                                                "processed_data":  {
+                                                                       "carriage_number":  "粤B99999挂",
+                                                                       "frequent_companies":  "[]",
+                                                                       "license_plate":  "粤B88888",
+                                                                       "standard_volume":  185.5,
+                                                                       "vehicle_category":  "挂车"
+                                                                   },
+                                                "row":  4,
+                                                "valid":  true
+                                            }
+                                        ]
+             },
+    "message":  "操作成功"
+}
+>>>>>>> e399a645b246d3136fc10af9b241795e7de2acd3
