@@ -20,6 +20,27 @@ class DispatchService:
     """
     
     @staticmethod
+    def _is_large_capacity_vehicle(standard_weight: str) -> bool:
+        """
+        判断是否为大容积车辆（标准吨位>=30吨）
+        
+        Args:
+            standard_weight: 标准吨位字符串，如"30吨"
+            
+        Returns:
+            bool: 是否为大容积车辆
+        """
+        if not standard_weight:
+            return False
+        
+        # 提取数字部分
+        try:
+            weight_num = int(standard_weight.replace('吨', '').replace('A', '').replace('B', ''))
+            return weight_num >= 30
+        except (ValueError, AttributeError):
+            return False
+    
+    @staticmethod
     def get_task_list(page: int = 1, per_page: int = 10, filters: Dict = None) -> Tuple[List[Dict], int]:
         """
         获取派车任务列表
@@ -33,9 +54,24 @@ class DispatchService:
             Tuple[List[Dict], int]: 任务列表和总数
         """
         try:
+            from flask import g
             query_obj = ManualDispatchTask.query
             
-            # 应用过滤条件
+            # 权限过滤：根据用户角色和关联单位过滤任务
+            current_user = getattr(g, 'current_user', None)
+            if current_user:
+                user_roles = [role.name for role in current_user.roles] if current_user.roles else []
+                
+                # 超级管理员和区域调度员可以看到全部任务
+                if not ('超级管理员' in user_roles or '区域调度员' in user_roles):
+                    # 其他角色只能看到与自己关联单位的任务
+                    if current_user.dispatch_unit_id:
+                        query_obj = query_obj.filter(ManualDispatchTask.organizing_unit_id == current_user.dispatch_unit_id)
+                    else:
+                        # 如果用户没有关联单位，则看不到任何任务
+                        query_obj = query_obj.filter(ManualDispatchTask.task_id == None)  # 返回空结果
+            
+            # 应用其他过滤条件
             if filters:
                 if filters.get('status'):
                     query_obj = query_obj.filter(ManualDispatchTask.status == filters['status'])
@@ -121,7 +157,11 @@ class DispatchService:
             dispatch_track = task_data.get('dispatch_track', '轨道A')
             requirement_type = task_data.get('requirement_type', '加班派车')
             
-            # 根据用户角色和需求类型确定轨道和状态
+            # 获取业务类型和标准吨位
+            business_type = task_data.get('business_type', '委办派车')
+            standard_weight = task_data.get('standard_weight', '')
+            
+            # 根据用户角色和业务类型确定轨道和状态
             if current_user_role == '车间地调':
                 # 车间地调只能使用轨道A，需要审核
                 dispatch_track = '轨道A'
@@ -133,9 +173,19 @@ class DispatchService:
                 if requirement_type == '正班派车':
                     # 正班派车直接下发，使用轨道B
                     dispatch_track = '轨道B'
-                    initial_status = '待供应商响应'
+                    if business_type == '自办派车':
+                        # 自办派车根据标准吨位决定处理人
+                        if DispatchService._is_large_capacity_vehicle(standard_weight):
+                            initial_status = '待响应'
+                            current_handler_role = '外包管理公司'
+                        else:
+                            initial_status = '待响应'
+                            current_handler_role = '班组长'
+                    else:
+                        # 委办派车
+                        initial_status = '待供应商响应'
+                        current_handler_role = '供应商'
                     audit_required = False
-                    current_handler_role = '供应商'
                 else:
                     # 加班派车根据选择的轨道确定流程
                     if dispatch_track == '轨道A':
@@ -143,9 +193,19 @@ class DispatchService:
                         audit_required = True
                         current_handler_role = '区域调度员'
                     else:  # 轨道B
-                        initial_status = '待供应商响应'
+                        if business_type == '自办派车':
+                            # 自办派车根据标准吨位决定处理人
+                            if DispatchService._is_large_capacity_vehicle(standard_weight):
+                                initial_status = '待响应'
+                                current_handler_role = '外包管理公司'
+                            else:
+                                initial_status = '待响应'
+                                current_handler_role = '班组长'
+                        else:
+                            # 委办派车
+                            initial_status = '待供应商响应'
+                            current_handler_role = '供应商'
                         audit_required = False
-                        current_handler_role = '供应商'
             else:
                 # 其他角色默认使用轨道A
                 dispatch_track = '轨道A'
@@ -160,6 +220,7 @@ class DispatchService:
                 origin_bureau=task_data.get('origin_bureau'),
                 mail_route_name=task_data.get('mail_route_name'),
                 organizing_unit=task_data.get('organizing_unit'),
+                organizing_unit_id=task_data.get('organizing_unit_id'),
                 transport_type=task_data.get('transport_type'),
                 requirement_type=requirement_type,
                 standard_weight=task_data.get('standard_weight'),

@@ -95,7 +95,12 @@ class Permission(db.Model):
             {'name': '审核调度', 'code': 'dispatch:approve', 'description': '审核与批准调度任务', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'execute'},
             {'name': '派发调度', 'code': 'dispatch:assign', 'description': '指派车辆与司机', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'execute'},
             {'name': '完成调度', 'code': 'dispatch:complete', 'description': '标记调度任务完成', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'execute'},
-            {'name': '查看跟踪', 'code': 'tracking:read', 'description': '查看运输跟踪信息', 'resource_type': 'api', 'resource_id': '/tracking', 'action': 'read'}
+            {'name': '查看跟踪', 'code': 'tracking:read', 'description': '查看运输跟踪信息', 'resource_type': 'api', 'resource_id': '/tracking', 'action': 'read'},
+            
+            # 供应商响应权限
+            {'name': '供应商响应', 'code': 'supplier:respond', 'description': '供应商响应调度任务', 'resource_type': 'api', 'resource_id': '/dispatch/supplier-response', 'action': 'write'},
+            {'name': '班组派车', 'code': 'team:assign', 'description': '班组长派车响应', 'resource_type': 'api', 'resource_id': '/dispatch/team-response', 'action': 'write'},
+            {'name': '外包派车', 'code': 'outsourcing:assign', 'description': '外包管理公司派车响应', 'resource_type': 'api', 'resource_id': '/dispatch/outsourcing-response', 'action': 'write'}
         ]
     
     @staticmethod

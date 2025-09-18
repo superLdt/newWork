@@ -288,15 +288,114 @@ export const dispatchService = {
   },
 
   /**
-   * 获取紧急任务列表
-   * @returns {Promise} - 返回紧急任务列表
+   * 获取紧急任务
+   * @returns {Promise} - 返回紧急任务数据
    */
   async getUrgentTasks() {
     try {
-      const response = await apiClient.get('/dispatch/dashboard/urgent-tasks')
+      const response = await apiClient.get('/dispatch/urgent-tasks')
       return response
     } catch (error) {
-      console.error('获取紧急任务列表失败:', error)
+      console.error('获取紧急任务失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 提交供应商响应
+   * @param {Object} responseData - 响应数据
+   * @returns {Promise} - 返回响应结果
+   */
+  async submitSupplierResponse(responseData) {
+    try {
+      const data = await apiClient.post('/dispatch/tasks/supplier-response', responseData)
+      
+      // 统一成功判定
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '响应提交成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      
+      // 未识别为成功，抛出错误
+      throw new Error(data?.message || '响应提交失败')
+    } catch (error) {
+      console.error('提交供应商响应失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 提交班组派车响应
+   * @param {Object} responseData - 响应数据
+   * @returns {Promise} - 返回响应结果
+   */
+  async submitTeamResponse(responseData) {
+    try {
+      const data = await apiClient.post('/dispatch/tasks/team-response', responseData)
+      
+      // 统一成功判定
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '派车响应提交成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      
+      // 未识别为成功，抛出错误
+      throw new Error(data?.message || '派车响应提交失败')
+    } catch (error) {
+      console.error('提交班组派车响应失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 提交外包管理公司响应
+   * @param {Object} responseData - 响应数据
+   * @returns {Promise} - 返回响应结果
+   */
+  async submitOutsourcingResponse(responseData) {
+    try {
+      const data = await apiClient.post('/dispatch/tasks/outsourcing-response', responseData)
+      
+      // 统一成功判定
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '外包响应提交成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      
+      // 未识别为成功，抛出错误
+      throw new Error(data?.message || '外包响应提交失败')
+    } catch (error) {
+      console.error('提交外包管理公司响应失败:', error)
       throw error
     }
   }

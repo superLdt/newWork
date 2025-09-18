@@ -4,7 +4,11 @@
       <template #header>
         <div class="card-header">
           <h2>派车任务管理</h2>
-          <el-button type="primary" @click="openCreateTaskDialog">新建派车任务</el-button>
+          <el-button 
+            type="primary" 
+            @click="openCreateTaskDialog"
+            v-if="hasPermission('dispatch:create') && canCreateTask"
+          >新建派车任务</el-button>
         </div>
       </template>
       
@@ -76,16 +80,10 @@
             >审核</el-button>
             <el-button 
               size="small" 
-              type="success" 
-              v-if="false && hasPermission('dispatch:assign')"
-              @click="openAssignVehicleDialog(scope.row)"
-            >分配车辆</el-button>
-            <el-button 
-              size="small" 
               type="warning" 
-              v-if="scope.row.status === '待响应' && hasPermission('dispatch:assign')"
-              @click="openAssignVehicleDialog(scope.row)"
-            >{{ scope.row.business_type === '自办派车' ? '内部响应' : '供应商响应' }}</el-button>
+              v-if="canSeeSupplierResponse(scope.row)"
+              @click="openSupplierResponseDialog(scope.row)"
+            >{{ getRoleBasedResponseText(scope.row) }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -157,6 +155,22 @@
         @cancel="assignVehicleDialogVisible = false"
       ></assign-vehicle-form>
     </el-dialog>
+    
+    <!-- 响应表单对话框（复用供应商响应表单） -->
+    <el-dialog
+      v-model="supplierResponseDialogVisible"
+      :title="getResponseDialogTitle()"
+      width="80%"
+      top="5vh"
+      :close-on-click-modal="false"
+    >
+      <supplier-response-form
+        v-if="supplierResponseDialogVisible && currentTask"
+        :task="currentTask"
+        @response-success="handleResponseSuccessFromList"
+        @cancel="supplierResponseDialogVisible = false"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -167,6 +181,7 @@ import TaskDetail from './components/TaskDetail.vue'
 import TaskForm from './components/TaskForm.vue'
 import ApproveForm from './components/ApproveForm.vue'
 import AssignVehicleForm from './components/AssignVehicleForm.vue'
+import SupplierResponseForm from './components/SupplierResponseForm.vue'
 import { usePermissionStore } from '@/stores/permission'
 import { dispatchService } from '@/services/dispatchService'
 
@@ -176,7 +191,8 @@ export default {
     TaskDetail,
     TaskForm,
     ApproveForm,
-    AssignVehicleForm
+    AssignVehicleForm,
+    SupplierResponseForm
   },
   setup() {
     const permissionStore = usePermissionStore()
@@ -194,6 +210,7 @@ export default {
     const createTaskDialogVisible = ref(false)
     const approveDialogVisible = ref(false)
     const assignVehicleDialogVisible = ref(false)
+    const supplierResponseDialogVisible = ref(false)
     
     // 过滤表单
     const filterForm = reactive({
@@ -349,6 +366,90 @@ export default {
       return permissionStore.hasPermission(permission)
     }
 
+    // 检查是否可以创建任务（只有超级管理员和区域调度员可以）
+    const canCreateTask = computed(() => {
+      const rolesArr = Array.isArray(permissionStore.roles) ? permissionStore.roles : []
+      const hasRole = (names) => rolesArr.some(r => names.includes(r))
+      return hasRole(['超级管理员', '区域调度员'])
+    })
+
+    // 基于当前用户角色返回响应按钮文本
+    const getRoleBasedResponseText = (taskRow) => {
+      try {
+        const rolesArr = Array.isArray(permissionStore.roles) ? permissionStore.roles : []
+        const hasRole = (names) => rolesArr.some(r => names.includes(r))
+
+        if (hasRole(['班组长', 'team_leader'])) return '自备派车'
+        if (hasRole(['外包管理公司', 'outsourcing_manager'])) return '大容积派车'
+        if (hasRole(['供应商', 'supplier'])) return '供应商响应'
+
+        // 兜底：按业务类型
+        return taskRow?.business_type === '自办派车' ? '内部响应' : '供应商响应'
+      } catch(e) {
+        // 异常时回退
+        return taskRow?.business_type === '自办派车' ? '内部响应' : '供应商响应'
+      }
+    }
+
+    // 根据用户角色与当前任务，生成响应表单对话框标题
+    const getResponseDialogTitle = () => {
+      try {
+        const rolesArr = Array.isArray(permissionStore.roles) ? permissionStore.roles : []
+        const hasRole = (names) => rolesArr.some(r => names.includes(r))
+
+        if (hasRole(['班组长', 'team_leader'])) return '自备派车'
+        if (hasRole(['外包管理公司', 'outsourcing_manager'])) return '大容积派车'
+        if (hasRole(['供应商', 'supplier'])) return '供应商响应'
+
+        // 兜底：结合业务类型
+        const bt = currentTask.value?.business_type
+        return bt === '自办派车' ? '内部响应' : '供应商响应'
+      } catch (e) {
+        const bt = currentTask.value?.business_type
+        return bt === '自办派车' ? '内部响应' : '供应商响应'
+      }
+    }
+
+    // 按角色与任务状态决定是否显示响应按钮
+    const canSeeSupplierResponse = (taskRow) => {
+      try {
+        const rolesArr = Array.isArray(permissionStore.roles) ? permissionStore.roles : []
+        const hasRole = (names) => rolesArr.some(r => names.includes(r))
+
+        // 允许在待响应或审核通过阶段进行响应
+        const allowedStatuses = ['待响应', '审核通过']
+        if (!allowedStatuses.includes(taskRow?.status)) return false
+
+        if (hasRole(['班组长', 'team_leader'])) return true
+        if (hasRole(['外包管理公司', 'outsourcing_manager'])) return true
+        if (hasRole(['供应商', 'supplier'])) return true
+        return false
+      } catch (e) {
+        return false
+      }
+    }
+
+    // 打开响应表单对话框
+    const openSupplierResponseDialog = (taskRow) => {
+      currentTask.value = taskRow
+      supplierResponseDialogVisible.value = true
+    }
+
+    // 从列表页响应成功后的处理
+    const handleResponseSuccessFromList = async () => {
+      try {
+        ElMessage.success('响应提交成功')
+        supplierResponseDialogVisible.value = false
+        await fetchTasks()
+        if (currentTask.value) {
+          const updated = taskList.value.find(t => t.task_id === currentTask.value.task_id)
+          if (updated) currentTask.value = { ...updated }
+        }
+      } catch (e) {
+        ElMessage.error('刷新列表失败')
+      }
+    }
+
     // 计算优先级类型
     const getPriorityType = (requiredDate) => {
       const now = new Date()
@@ -434,10 +535,18 @@ export default {
       handleAssignVehicleSubmit,
       getStatusType,
       hasPermission,
+      canCreateTask,
       getPriorityType, // 暴露给模板
       getPriorityText,  // 暴露给模板
       handleTaskUpdated,
-      handleTaskDetailClose
+      handleTaskDetailClose,
+      getRoleBasedResponseText,
+      // 新增：响应表单相关
+      supplierResponseDialogVisible,
+      canSeeSupplierResponse,
+      openSupplierResponseDialog,
+      getResponseDialogTitle,
+      handleResponseSuccessFromList
     }
   }
 }

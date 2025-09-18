@@ -61,6 +61,23 @@
           {{ action.label }}
         </el-button>
       </div>
+
+    <!-- 供应商响应表单对话框 -->
+    <el-dialog
+      v-model="supplierResponseDialogVisible"
+      :title="getResponseDialogTitle()"
+      width="80%"
+      top="5vh"
+      :close-on-click-modal="false"
+      @close="handleSupplierResponseClose"
+    >
+      <supplier-response-form
+        v-if="supplierResponseDialogVisible"
+        :task="task"
+        @response-success="handleResponseSuccess"
+        @cancel="handleSupplierResponseClose"
+      />
+    </el-dialog>
     </div>
 
     <!-- 详细信息网格 -->
@@ -231,6 +248,8 @@ import {
 } from '@element-plus/icons-vue'
 import { usePermissionStore } from '@/stores/permission'
 import { apiService } from '@/services/api'
+import SupplierResponseForm from './SupplierResponseForm.vue'
+import { useUserStore } from '@/stores/user'
 
 export default {
   name: 'TaskDetail',
@@ -243,7 +262,8 @@ export default {
     Phone,
     Box,
     Clock,
-    ChatDotRound
+    ChatDotRound,
+    SupplierResponseForm
   },
   props: {
     task: {
@@ -253,7 +273,9 @@ export default {
   },
   setup(props, { emit }) {
     const permissionStore = usePermissionStore()
+    const userStore = useUserStore()
     const actionDialogVisible = ref(false)
+    const supplierResponseDialogVisible = ref(false)
     const currentAction = ref(null)
     const submitting = ref(false)
     const loadingActions = reactive({})
@@ -299,7 +321,6 @@ export default {
     const currentUserRole = computed(() => {
       const userInfo = permissionStore.userInfo
       if (userInfo && userInfo.roles && userInfo.roles.length > 0) {
-        // 兼容两种格式：字符串数组和对象数组
         const firstRole = userInfo.roles[0]
         if (typeof firstRole === 'string') {
           return firstRole
@@ -307,88 +328,78 @@ export default {
           return firstRole.name
         }
       }
-      // 也检查permissionStore.roles（字符串数组）
       if (permissionStore.roles && permissionStore.roles.length > 0) {
         return permissionStore.roles[0]
       }
-      return 'regional_dispatcher' // 默认角色
+      // 从userStore兜底读取角色（role_name）
+      if (userStore?.currentUser?.role_name) {
+        return userStore.currentUser.role_name
+      }
+      return 'regional_dispatcher'
     })
 
-    // 角色权限映射（根据业务流程图更新）
+    // 状态标准化（兼容中文/英文状态）
+    const normalizeStatus = (status) => {
+      if (!status) return ''
+      const map = {
+        '待响应': 'awaiting_supplier_response',
+        '待供应商响应': 'awaiting_supplier_response',
+        '待班组派车': 'awaiting_team_assignment',
+        '已审批': 'approved',
+        '已拒绝': 'rejected',
+        '已完成': 'completed',
+        '进行中': 'in_progress',
+        '已分配': 'assigned',
+        '已确认': 'confirmed',
+        '最终确认': 'final_confirmed',
+        '已发车': 'departed'
+      }
+      return map[status] || status
+    }
+
+    // 角色-动作映射（用于渲染不同角色在不同状态下的操作按钮）
     const roleActionMap = {
-      // 超级管理员 - 可以审核车间地调发起的任务
-      '超级管理员': [
-        { key: 'approve', label: '审批通过', type: 'primary', icon: Check, status: ['pending'] },
-        { key: 'reject', label: '拒绝', type: 'danger', icon: Close, status: ['pending'] }
-      ],
-      // 区域调度员 - 可以审核车间地调发起的任务
-      '区域调度员': [
-        { key: 'approve', label: '审批通过', type: 'primary', icon: Check, status: ['pending'] },
-        { key: 'reject', label: '拒绝', type: 'danger', icon: Close, status: ['pending'] }
-      ],
-      // 车间地调 - 发起任务后等待审核，最后确认发车
-      '车间地调': [
-        { key: 'depart_confirm', label: '发车确认', type: 'primary', icon: Promotion, status: ['final_confirmed'] }
-      ],
-      // 供应商 - 响应委办任务
+      // 供应商在“待供应商响应/已审批”时可以进行“响应接单”
       '供应商': [
-        { key: 'respond', label: '响应接单', type: 'success', icon: Position, status: ['awaiting_supplier_response'] }
-      ],
-      // 班组长 - 处理自办车辆任务
-      '班组长': [
-        { key: 'team_assign', label: '班组派车', type: 'warning', icon: CircleCheck, status: ['awaiting_team_assignment'] }
-      ],
-      // 外包管理公司 - 处理大容积自办车辆任务
-      '外包管理公司': [
-        { key: 'outsourcing_assign', label: '外包派车', type: 'success', icon: Select, status: ['awaiting_team_assignment'] }
-      ],
-      // 兼容旧的英文角色名
-      regional_dispatcher: [
-        { key: 'approve', label: '审批通过', type: 'primary', icon: Check, status: ['pending'] },
-        { key: 'reject', label: '拒绝', type: 'danger', icon: Close, status: ['pending'] }
+      -        { key: 'respond', label: '响应接单', type: 'primary', icon: Check, status: ['awaiting_supplier_response', 'approved'] }
+      +        { key: 'respond', label: '供应商响应', type: 'primary', icon: Check, status: ['awaiting_supplier_response', 'approved'] }
       ],
       supplier: [
-        { key: 'respond', label: '响应接单', type: 'success', icon: Position, status: ['awaiting_supplier_response'] }
+      -        { key: 'respond', label: '响应接单', type: 'primary', icon: Check, status: ['awaiting_supplier_response', 'approved'] }
+      +        { key: 'respond', label: '供应商响应', type: 'primary', icon: Check, status: ['awaiting_supplier_response', 'approved'] }
+      ],
+      // 班组长在“待班组派车”时进行派车（复用响应表单）
+      '班组长': [
+      -        { key: 'respond', label: '派遣车辆', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      +        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       ],
       team_leader: [
-        { key: 'team_assign', label: '班组派车', type: 'warning', icon: CircleCheck, status: ['awaiting_team_assignment'] }
+      -        { key: 'respond', label: '派遣车辆', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      +        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      ],
+      // 外包管理公司在“待班组派车”时进行外包派车（复用响应表单）
+      '外包管理公司': [
+      -        { key: 'respond', label: '外包派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      +        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       ],
       outsourcing_manager: [
-        { key: 'outsourcing_assign', label: '外包派车', type: 'success', icon: Select, status: ['awaiting_team_assignment'] }
-      ],
-      workshop_dispatcher: [
-        { key: 'depart_confirm', label: '发车确认', type: 'primary', icon: Promotion, status: ['final_confirmed'] }
+      -        { key: 'respond', label: '外包派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
+      +        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
       ]
     }
 
     // 可用操作按钮
     const availableActions = computed(() => {
       const actions = roleActionMap[currentUserRole.value] || []
-      return actions.filter(action => action.status.includes(props.task.status))
+      const taskStatus = normalizeStatus(props.task.status)
+      return actions.filter(action => (action.status || []).map(normalizeStatus).includes(taskStatus))
     })
 
     const hasAvailableActions = computed(() => availableActions.value.length > 0)
 
-    // 状态文本映射（根据业务流程图更新）
-    const statusTextMap = {
-      pending: '待审核',
-      approved: '已审批',
-      rejected: '已拒绝',
-      awaiting_supplier_response: '待供应商响应',
-      awaiting_team_assignment: '待班组派车',
-      supplier_responded: '供应商已响应',
-      team_assigned: '班组已派车',
-      assigned: '已分配',
-      confirmed: '已确认',
-      final_confirmed: '最终确认',
-      departed: '已发车',
-      completed: '已完成',
-      cancelled: '已取消',
-      in_progress: '进行中'
-    }
-
     // 状态提示样式
     const getStatusAlertClass = (status) => {
+      const s = normalizeStatus(status)
       const classMap = {
         pending: 'status-pending',
         approved: 'status-approved',
@@ -405,16 +416,34 @@ export default {
         cancelled: 'status-cancelled',
         in_progress: 'status-in-progress'
       }
-      return classMap[status] || 'status-info'
+      return classMap[s] || 'status-info'
     }
 
     // 获取状态文本
     const getStatusText = (status) => {
-      return statusTextMap[status] || status
+      const s = normalizeStatus(status)
+      const statusTextMap = {
+        pending: '待审核',
+        approved: '已审批',
+        rejected: '已拒绝',
+        awaiting_supplier_response: '待供应商响应',
+        awaiting_team_assignment: '待班组派车',
+        supplier_responded: '供应商已响应',
+        team_assigned: '班组已派车',
+        assigned: '已分配',
+        confirmed: '已确认',
+        final_confirmed: '最终确认',
+        departed: '已发车',
+        completed: '已完成',
+        cancelled: '已取消',
+        in_progress: '进行中'
+      }
+      return statusTextMap[s] || status
     }
 
-    // 获取下一步操作提示（根据业务流程图更新）
+    // 获取下一步操作提示
     const getNextActionHint = (status, role) => {
+      const s = normalizeStatus(status)
       const hintMap = {
         pending: {
           '超级管理员': '请审核此任务',
@@ -521,6 +550,7 @@ export default {
 
     // 获取状态类型
     const getStatusType = (status) => {
+      const s = normalizeStatus(status)
       const statusMap = {
         pending: 'info',
         approved: 'success',
@@ -532,7 +562,7 @@ export default {
         completed: 'success',
         cancelled: 'danger'
       }
-      return statusMap[status] || 'info'
+      return statusMap[s] || 'info'
     }
 
     // 获取时间线项目类型
@@ -558,8 +588,14 @@ export default {
       const action = availableActions.value.find(a => a.key === actionKey)
       if (action) {
         currentAction.value = action
-        actionForm.comment = ''
-        actionDialogVisible.value = true
+        
+        if (actionKey === 'respond') {
+          // 打开供应商响应表单
+          supplierResponseDialogVisible.value = true
+        } else {
+          actionForm.comment = ''
+          actionDialogVisible.value = true
+        }
       }
     }
 
@@ -590,6 +626,31 @@ export default {
       }
     }
 
+    // 获取响应对话框标题
+    const getResponseDialogTitle = () => {
+      const userRole = currentUserRole.value
+      if (userRole === '供应商' || userRole === 'supplier') {
+        return '供应商响应'
+      } else if (userRole === '班组长' || userRole === 'team_leader') {
+        return '自备派车'
+      } else if (userRole === '外包管理公司' || userRole === 'outsourcing_manager') {
+        return '大容积派车'
+      }
+      return '响应任务'
+    }
+
+    // 处理供应商响应成功
+    const handleResponseSuccess = (result) => {
+      ElMessage.success('响应提交成功')
+      supplierResponseDialogVisible.value = false
+      emit('task-updated', result)
+    }
+
+    // 关闭供应商响应对话框
+    const handleSupplierResponseClose = () => {
+      supplierResponseDialogVisible.value = false
+    }
+
     onMounted(() => {
       if (props.task.status_history) {
         props.task.status_history.forEach(history => {
@@ -604,6 +665,7 @@ export default {
       hasAvailableActions,
       loadingActions,
       actionDialogVisible,
+      supplierResponseDialogVisible,
       currentAction,
       actionForm,
       getStatusAlertClass,
@@ -614,6 +676,9 @@ export default {
       formatDateTime,
       handleAction,
       confirmAction,
+      getResponseDialogTitle,
+      handleResponseSuccess,
+      handleSupplierResponseClose,
       userFullNames,
       normalizeUserId
     }

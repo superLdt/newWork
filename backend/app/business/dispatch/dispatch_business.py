@@ -26,6 +26,326 @@ class DispatchBusiness:
     @staticmethod
     def _ok(msg: str = 'OK') -> Dict[str, Any]:
         return {'valid': True, 'message': msg}
+    
+    @staticmethod
+    def _error(msg: str) -> Dict[str, Any]:
+        return {'valid': False, 'message': msg}
+    
+    # == 供应商响应相关验证和处理 ==
+    @staticmethod
+    def validate_supplier_response_data(data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        验证供应商响应数据
+        
+        Args:
+            data: 响应数据
+            
+        Returns:
+            Dict: 验证结果
+        """
+        if not data:
+            return DispatchBusiness._error('请求数据不能为空')
+        
+        # 验证必填字段
+        required_fields = ['task_id', 'manifest_number', 'dispatch_number', 'vehicles']
+        for field in required_fields:
+            if not data.get(field):
+                return DispatchBusiness._error(f'{field} 不能为空')
+        
+        # 验证车辆信息
+        vehicles = data.get('vehicles', [])
+        if not vehicles or len(vehicles) == 0:
+            return DispatchBusiness._error('至少需要提供一辆车辆信息')
+        
+        for i, vehicle in enumerate(vehicles):
+            # 车牌号必填
+            if not vehicle.get('license_plate'):
+                return DispatchBusiness._error(f'第{i+1}辆车的车牌号不能为空')
+            
+            # 司机信息必填
+            if not vehicle.get('driver_name'):
+                return DispatchBusiness._error(f'第{i+1}辆车的司机姓名不能为空')
+            
+            if not vehicle.get('driver_phone'):
+                return DispatchBusiness._error(f'第{i+1}辆车的司机电话不能为空')
+            
+            # 车辆类型必填
+            if not vehicle.get('vehicle_type'):
+                return DispatchBusiness._error(f'第{i+1}辆车的车型不能为空')
+            
+            # 载重量和容积必填且大于0
+            if not vehicle.get('load_capacity') or vehicle.get('load_capacity', 0) <= 0:
+                return DispatchBusiness._error(f'第{i+1}辆车的载重量必须大于0')
+            
+            if not vehicle.get('actual_volume') or vehicle.get('actual_volume', 0) <= 0:
+                return DispatchBusiness._error(f'第{i+1}辆车的实际容积必须大于0')
+        
+        return DispatchBusiness._ok('数据验证通过')
+    
+    @staticmethod
+    def validate_team_response_data(data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        验证班组响应数据
+        
+        Args:
+            data: 响应数据
+            
+        Returns:
+            Dict: 验证结果
+        """
+        # 班组响应与供应商响应验证规则相同
+        return DispatchBusiness.validate_supplier_response_data(data)
+    
+    @staticmethod
+    def validate_outsourcing_response_data(data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        验证外包管理公司响应数据
+        
+        Args:
+            data: 响应数据
+            
+        Returns:
+            Dict: 验证结果
+        """
+        # 外包管理公司响应与供应商响应验证规则相同
+        return DispatchBusiness.validate_supplier_response_data(data)
+    
+    @staticmethod
+    def process_supplier_response(data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        处理供应商响应
+        
+        Args:
+            data: 响应数据
+            
+        Returns:
+            Dict: 处理结果
+        """
+        from app.models.manual_dispatch_task import ManualDispatchTask
+        from app.models.vehicle.vehicle import Vehicle
+        from app.models.dispatch_status_history import DispatchStatusHistory
+        from app.extensions import db
+        from datetime import datetime
+        
+        try:
+            task_id = data['task_id']
+            
+            # 查找任务
+            task = ManualDispatchTask.query.filter_by(task_id=task_id).first()
+            if not task:
+                raise ValueError(f'任务 {task_id} 不存在')
+            
+            # 检查任务状态
+            if task.status != 'awaiting_supplier_response':
+                raise ValueError(f'任务状态不正确，当前状态：{task.status}')
+            
+            # 创建车辆记录
+            for vehicle_data in data['vehicles']:
+                vehicle = Vehicle(
+                    task_id=task_id,
+                    manifest_number=data['manifest_number'],
+                    dispatch_number=data['dispatch_number'],
+                    license_plate=vehicle_data['license_plate'],
+                    carriage_number=vehicle_data.get('carriage_number', ''),
+                    vehicle_type=vehicle_data['vehicle_type'],
+                    actual_volume=vehicle_data['actual_volume'],
+                    notes=data.get('notes', ''),
+                    supplier_type='供应商'
+                )
+                
+                # 添加司机信息等其他字段
+                if hasattr(vehicle, 'driver_name'):
+                    vehicle.driver_name = vehicle_data['driver_name']
+                if hasattr(vehicle, 'driver_phone'):
+                    vehicle.driver_phone = vehicle_data['driver_phone']
+                if hasattr(vehicle, 'load_capacity'):
+                    vehicle.load_capacity = vehicle_data['load_capacity']
+                
+                db.session.add(vehicle)
+            
+            # 更新任务状态
+            task.status = 'supplier_responded'
+            
+            # 记录状态历史
+            status_history = DispatchStatusHistory(
+                task_id=task_id,
+                status_change='供应商已响应',
+                operator='供应商',
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                note=data.get('notes', '')
+            )
+            db.session.add(status_history)
+            
+            # 提交事务
+            db.session.commit()
+            
+            return {
+                'task_id': task_id,
+                'status': 'supplier_responded',
+                'message': '供应商响应提交成功'
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            raise e
+    
+    @staticmethod
+    def process_team_response(data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        处理班组响应
+        
+        Args:
+            data: 响应数据
+            
+        Returns:
+            Dict: 处理结果
+        """
+        from app.models.manual_dispatch_task import ManualDispatchTask
+        from app.models.vehicle.vehicle import Vehicle
+        from app.models.dispatch_status_history import DispatchStatusHistory
+        from app.extensions import db
+        from datetime import datetime
+        
+        try:
+            task_id = data['task_id']
+            
+            # 查找任务
+            task = ManualDispatchTask.query.filter_by(task_id=task_id).first()
+            if not task:
+                raise ValueError(f'任务 {task_id} 不存在')
+            
+            # 检查任务状态
+            if task.status != 'awaiting_team_assignment':
+                raise ValueError(f'任务状态不正确，当前状态：{task.status}')
+            
+            # 创建车辆记录
+            for vehicle_data in data['vehicles']:
+                vehicle = Vehicle(
+                    task_id=task_id,
+                    manifest_number=data['manifest_number'],
+                    dispatch_number=data['dispatch_number'],
+                    license_plate=vehicle_data['license_plate'],
+                    carriage_number=vehicle_data.get('carriage_number', ''),
+                    vehicle_type=vehicle_data['vehicle_type'],
+                    actual_volume=vehicle_data['actual_volume'],
+                    notes=data.get('notes', ''),
+                    supplier_type='班组'
+                )
+                
+                # 添加司机信息等其他字段
+                if hasattr(vehicle, 'driver_name'):
+                    vehicle.driver_name = vehicle_data['driver_name']
+                if hasattr(vehicle, 'driver_phone'):
+                    vehicle.driver_phone = vehicle_data['driver_phone']
+                if hasattr(vehicle, 'load_capacity'):
+                    vehicle.load_capacity = vehicle_data['load_capacity']
+                
+                db.session.add(vehicle)
+            
+            # 更新任务状态
+            task.status = 'team_assigned'
+            
+            # 记录状态历史
+            status_history = DispatchStatusHistory(
+                task_id=task_id,
+                status_change='班组已派车',
+                operator='班组长',
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                note=data.get('notes', '')
+            )
+            db.session.add(status_history)
+            
+            # 提交事务
+            db.session.commit()
+            
+            return {
+                'task_id': task_id,
+                'status': 'team_assigned',
+                'message': '班组派车响应提交成功'
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            raise e
+    
+    @staticmethod
+    def process_outsourcing_response(data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        处理外包管理公司响应
+        
+        Args:
+            data: 响应数据
+            
+        Returns:
+            Dict: 处理结果
+        """
+        from app.models.manual_dispatch_task import ManualDispatchTask
+        from app.models.vehicle.vehicle import Vehicle
+        from app.models.dispatch_status_history import DispatchStatusHistory
+        from app.extensions import db
+        from datetime import datetime
+        
+        try:
+            task_id = data['task_id']
+            
+            # 查找任务
+            task = ManualDispatchTask.query.filter_by(task_id=task_id).first()
+            if not task:
+                raise ValueError(f'任务 {task_id} 不存在')
+            
+            # 检查任务状态
+            if task.status != 'awaiting_team_assignment':
+                raise ValueError(f'任务状态不正确，当前状态：{task.status}')
+            
+            # 创建车辆记录
+            for vehicle_data in data['vehicles']:
+                vehicle = Vehicle(
+                    task_id=task_id,
+                    manifest_number=data['manifest_number'],
+                    dispatch_number=data['dispatch_number'],
+                    license_plate=vehicle_data['license_plate'],
+                    carriage_number=vehicle_data.get('carriage_number', ''),
+                    vehicle_type=vehicle_data['vehicle_type'],
+                    actual_volume=vehicle_data['actual_volume'],
+                    notes=data.get('notes', ''),
+                    supplier_type='外包管理公司'
+                )
+                
+                # 添加司机信息等其他字段
+                if hasattr(vehicle, 'driver_name'):
+                    vehicle.driver_name = vehicle_data['driver_name']
+                if hasattr(vehicle, 'driver_phone'):
+                    vehicle.driver_phone = vehicle_data['driver_phone']
+                if hasattr(vehicle, 'load_capacity'):
+                    vehicle.load_capacity = vehicle_data['load_capacity']
+                
+                db.session.add(vehicle)
+            
+            # 更新任务状态
+            task.status = 'team_assigned'
+            
+            # 记录状态历史
+            status_history = DispatchStatusHistory(
+                task_id=task_id,
+                status_change='外包管理公司已派车',
+                operator='外包管理公司',
+                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                note=data.get('notes', '')
+            )
+            db.session.add(status_history)
+            
+            # 提交事务
+            db.session.commit()
+            
+            return {
+                'task_id': task_id,
+                'status': 'team_assigned',
+                'message': '外包管理公司响应提交成功'
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            raise e
 
     @staticmethod
     def _bad(msg: str) -> Dict[str, Any]:

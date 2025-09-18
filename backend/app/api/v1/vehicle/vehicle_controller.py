@@ -4,7 +4,7 @@ from app.business.vehicle.vehicle_business import VehicleBusiness
 from app.services.vehicle_validation_service import VehicleValidationService
 from app.services.excel_processing_service import ExcelProcessingService
 from app.services.batch_import_service import BatchImportService
-from app.auth.decorators import permission_required
+from app.auth.decorators import permission_required, permission_required_any
 from app.common.response import success_response, error_response
 from typing import Dict, Any
 import logging
@@ -520,7 +520,7 @@ class VehicleController:
             return error_response(str(e), 500)
     
     @staticmethod
-    @permission_required('vehicle:read')
+    @permission_required_any(['supplier:respond', 'team:assign', 'outsourcing:assign'])
     def get_available_vehicles():
         """
         获取可用车辆列表

@@ -37,8 +37,15 @@
         <el-input v-model="formData.mail_route_name" placeholder="请输入邮路名称"></el-input>
       </el-form-item>
       
-      <el-form-item label="组开单位" prop="organizing_unit">
-        <el-input v-model="formData.organizing_unit" placeholder="请输入组开单位"></el-input>
+      <el-form-item label="组开单位" prop="organizing_unit_id">
+        <el-select v-model="formData.organizing_unit_id" placeholder="请选择组开单位" @change="handleOrganizingUnitChange">
+          <el-option
+            v-for="unit in filteredDispatchUnits"
+            :key="unit.id"
+            :label="unit.name"
+            :value="unit.id"
+          ></el-option>
+        </el-select>
       </el-form-item>
       
       <el-form-item label="运输类型" prop="transport_type">
@@ -116,6 +123,7 @@
 <script>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { usePermissionStore } from '@/stores/permission'
+import { dispatchUnitService } from '@/services/dispatchUnitService'
 import dayjs from 'dayjs'
 
 export default {
@@ -130,6 +138,7 @@ export default {
   setup(props, { emit }) {
     const formRef = ref(null)
     const permissionStore = usePermissionStore()
+    const dispatchUnits = ref([])
     
     // 获取当前用户角色
     const currentUserRole = computed(() => {
@@ -184,6 +193,7 @@ export default {
       origin_bureau: props.task?.origin_bureau || '',
       mail_route_name: props.task?.mail_route_name || '',
       organizing_unit: props.task?.organizing_unit || '',
+      organizing_unit_id: props.task?.organizing_unit_id || null,
       transport_type: props.task?.transport_type || '',
       requirement_type: props.task?.requirement_type || '',
       standard_weight: props.task?.standard_weight || '',
@@ -215,13 +225,32 @@ export default {
      // 业务类型变化处理
      const handleBusinessTypeChange = (value) => {
        console.log('业务类型变更为:', value)
+       
+       // 切换业务类型时，检查当前选择的组开单位是否符合新的过滤条件
+       if (formData.organizing_unit_id) {
+         const currentUnit = dispatchUnits.value.find(unit => unit.id === formData.organizing_unit_id)
+         if (currentUnit) {
+           if (value === '自办派车') {
+             // 自办派车只能选择内部单位或外包驾驶管理公司
+             if (currentUnit.unit_type !== '内部单位' && currentUnit.unit_type !== '外包驾驶管理公司') {
+               formData.organizing_unit_id = null
+               formData.organizing_unit = ''
+             }
+           }
+         }
+       }
+       
        // 根据业务类型调整其他字段的默认值或显示逻辑
        if (value === '自办派车') {
          // 自办派车的特殊处理逻辑
-         formData.organizing_unit = formData.organizing_unit || '自办车队'
+         if (!formData.organizing_unit) {
+           formData.organizing_unit = '自办车队'
+         }
        } else {
          // 委办派车的特殊处理逻辑
-         formData.organizing_unit = formData.organizing_unit || ''
+         if (!formData.organizing_unit) {
+           formData.organizing_unit = ''
+         }
        }
      }
 
@@ -235,9 +264,45 @@ export default {
       }
     }
 
-    // 组件挂载时设置审核需求
+    // 加载调度单位列表
+     const loadDispatchUnits = async () => {
+       try {
+         const response = await dispatchUnitService.getActiveDispatchUnits()
+         if (response.code === 0) {
+           dispatchUnits.value = response.data || []
+         } else {
+           console.error('加载调度单位失败:', response.message)
+         }
+       } catch (error) {
+         console.error('加载调度单位失败:', error)
+       }
+     }
+    
+    // 根据业务类型过滤组开单位
+     const filteredDispatchUnits = computed(() => {
+       if (formData.business_type === '自办派车') {
+         // 自办派车只显示内部单位或外包驾驶管理公司
+         return dispatchUnits.value.filter(unit => 
+           unit.unit_type === '内部单位' || unit.unit_type === '外包驾驶管理公司'
+         )
+       } else {
+         // 委办派车显示所有单位
+         return dispatchUnits.value
+       }
+     })
+     
+     // 组开单位变化处理
+     const handleOrganizingUnitChange = (unitId) => {
+       const selectedUnit = dispatchUnits.value.find(unit => unit.id === unitId)
+       if (selectedUnit) {
+         formData.organizing_unit = selectedUnit.name
+       }
+     }
+
+    // 组件挂载时设置审核需求和加载数据
     onMounted(() => {
       setAuditRequiredByRole()
+      loadDispatchUnits()
     })
     
     // 表单验证规则
@@ -254,8 +319,8 @@ export default {
       mail_route_name: [
         { required: true, message: '请输入邮路名称', trigger: 'blur' }
       ],
-      organizing_unit: [
-        { required: true, message: '请输入组开单位', trigger: 'blur' }
+      organizing_unit_id: [
+        { required: true, message: '请选择组开单位', trigger: 'change' }
       ],
       transport_type: [
         { required: true, message: '请选择运输类型', trigger: 'change' }
@@ -327,7 +392,10 @@ export default {
        cancel,
        actualVolumeDisabled,
        handleWeightChange,
-       handleBusinessTypeChange
+       handleBusinessTypeChange,
+       dispatchUnits,
+        filteredDispatchUnits,
+        handleOrganizingUnitChange
      }
   }
 }

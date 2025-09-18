@@ -488,6 +488,198 @@ class DispatchController:
             return error_response(str(e), 500)
     
     @staticmethod
+    @permission_required('supplier:respond')
+    def submit_supplier_response():
+        """
+        提交供应商响应
+        ---
+        tags:
+          - 派车管理
+        parameters:
+          - name: body
+            in: body
+            required: true
+            schema:
+              type: object
+              properties:
+                task_id:
+                  type: string
+                  description: 任务ID
+                manifest_number:
+                  type: string
+                  description: 货票号
+                dispatch_number:
+                  type: string
+                  description: 派车单号
+                vehicles:
+                  type: array
+                  description: 车辆信息列表
+                  items:
+                    type: object
+                    properties:
+                      license_plate:
+                        type: string
+                        description: 车牌号
+                      carriage_number:
+                        type: string
+                        description: 车厢号
+                      driver_name:
+                        type: string
+                        description: 司机姓名
+                      driver_phone:
+                        type: string
+                        description: 司机电话
+                      vehicle_type:
+                        type: string
+                        description: 车辆类型
+                      load_capacity:
+                        type: number
+                        description: 载重量
+                      actual_volume:
+                        type: number
+                        description: 实际容积
+                notes:
+                  type: string
+                  description: 响应备注
+        responses:
+          200:
+            description: 响应提交成功
+          400:
+            description: 参数错误
+          500:
+            description: 服务器错误
+        """
+        try:
+            # 获取请求数据
+            data = request.get_json()
+            
+            # 数据验证
+            validation_result = DispatchBusiness.validate_supplier_response_data(data)
+            if not validation_result['valid']:
+                return error_response(validation_result['message'], 400)
+            
+            # 调用业务层处理供应商响应
+            result = DispatchBusiness.process_supplier_response(data)
+            
+            # 返回成功响应
+            return success_response(result)
+        except Exception as e:
+            logger.error(f"提交供应商响应失败: {str(e)}")
+            return error_response(str(e), 500)
+    
+    @staticmethod
+    @permission_required('team:assign')
+    def submit_team_response():
+        """
+        提交班组派车响应
+        ---
+        tags:
+          - 派车管理
+        parameters:
+          - name: body
+            in: body
+            required: true
+            schema:
+              type: object
+              properties:
+                task_id:
+                  type: string
+                  description: 任务ID
+                manifest_number:
+                  type: string
+                  description: 货票号
+                dispatch_number:
+                  type: string
+                  description: 派车单号
+                vehicles:
+                  type: array
+                  description: 车辆信息列表
+                notes:
+                  type: string
+                  description: 响应备注
+        responses:
+          200:
+            description: 班组响应提交成功
+          400:
+            description: 参数错误
+          500:
+            description: 服务器错误
+        """
+        try:
+            # 获取请求数据
+            data = request.get_json()
+            
+            # 数据验证
+            validation_result = DispatchBusiness.validate_team_response_data(data)
+            if not validation_result['valid']:
+                return error_response(validation_result['message'], 400)
+            
+            # 调用业务层处理班组响应
+            result = DispatchBusiness.process_team_response(data)
+            
+            # 返回成功响应
+            return success_response(result)
+        except Exception as e:
+            logger.error(f"提交班组响应失败: {str(e)}")
+            return error_response(str(e), 500)
+    
+    @staticmethod
+    @permission_required('outsourcing:assign')
+    def submit_outsourcing_response():
+        """
+        提交外包管理公司响应
+        ---
+        tags:
+          - 派车管理
+        parameters:
+          - name: body
+            in: body
+            required: true
+            schema:
+              type: object
+              properties:
+                task_id:
+                  type: string
+                  description: 任务ID
+                manifest_number:
+                  type: string
+                  description: 货票号
+                dispatch_number:
+                  type: string
+                  description: 派车单号
+                vehicles:
+                  type: array
+                  description: 车辆信息列表
+                notes:
+                  type: string
+                  description: 响应备注
+        responses:
+          200:
+            description: 外包响应提交成功
+          400:
+            description: 参数错误
+          500:
+            description: 服务器错误
+        """
+        try:
+            # 获取请求数据
+            data = request.get_json()
+            
+            # 数据验证
+            validation_result = DispatchBusiness.validate_outsourcing_response_data(data)
+            if not validation_result['valid']:
+                return error_response(validation_result['message'], 400)
+            
+            # 调用业务层处理外包响应
+            result = DispatchBusiness.process_outsourcing_response(data)
+            
+            # 返回成功响应
+            return success_response(result)
+        except Exception as e:
+            logger.error(f"提交外包响应失败: {str(e)}")
+            return error_response(str(e), 500)
+    
+    @staticmethod
     @permission_required('dispatch:read')
     def get_task_status_history(task_id: str):
         """

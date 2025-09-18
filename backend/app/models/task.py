@@ -14,6 +14,7 @@ class ManualDispatchTask(db.Model):
     origin_bureau = db.Column(db.String(100), comment='始发局')
     mail_route_name = db.Column(db.String(100), comment='邮路名称')
     organizing_unit = db.Column(db.String(100), comment='组开单位（承运商）')
+    organizing_unit_id = db.Column(db.Integer, db.ForeignKey('dispatch_units.id'), comment='组开单位ID，关联派车单位表')
     transport_type = db.Column(db.String(50), comment='运输类型')
     requirement_type = db.Column(db.String(50), comment='需求类型')
     standard_weight = db.Column(db.String(20), comment='标准吨位')
@@ -41,6 +42,7 @@ class ManualDispatchTask(db.Model):
     # 关系定义
     vehicles = db.relationship('Vehicle', backref='task', lazy=True, cascade='all, delete-orphan')
     status_history = db.relationship('DispatchStatusHistory', backref='task', lazy=True, cascade='all, delete-orphan')
+    organizing_unit_obj = db.relationship('DispatchUnit', backref=db.backref('tasks', lazy=True))
     
     def __repr__(self):
         return f'<ManualDispatchTask {self.task_id}: {self.mail_route_name}>'
@@ -57,6 +59,8 @@ class ManualDispatchTask(db.Model):
             'origin_bureau': self.origin_bureau,
             'mail_route_name': self.mail_route_name,
             'organizing_unit': self.organizing_unit,
+            'organizing_unit_id': self.organizing_unit_id,
+            'organizing_unit_obj': self.organizing_unit_obj.to_dict() if self.organizing_unit_obj else None,
             'transport_type': self.transport_type,
             'requirement_type': self.requirement_type,
             'standard_weight': self.standard_weight,

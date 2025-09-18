@@ -58,3 +58,12 @@ dispatch_bp.route('/dashboard/urgent-tasks', methods=['GET'])(DashboardControlle
 
 # 完整仪表盘数据路由
 dispatch_bp.route('/dashboard/complete', methods=['GET'])(DashboardController.get_complete_dashboard)
+
+# 供应商响应路由
+dispatch_bp.route('/tasks/supplier-response', methods=['POST'])(DispatchController.submit_supplier_response)
+
+# 班组派车响应路由
+dispatch_bp.route('/tasks/team-response', methods=['POST'])(DispatchController.submit_team_response)
+
+# 外包管理公司响应路由
+dispatch_bp.route('/tasks/outsourcing-response', methods=['POST'])(DispatchController.submit_outsourcing_response)

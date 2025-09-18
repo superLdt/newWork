@@ -3,7 +3,7 @@ import axios from 'axios'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api/v1', // 后端API基础URL
+  baseURL: '/api/v1', // 通过Vite代理避免CORS
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -93,7 +93,7 @@ api.interceptors.response.use(
         }
         
         // 实际的刷新token请求，这里需要根据后端接口调整
-        const refreshResponse = await axios.post('http://localhost:5000/api/v1/auth/refresh', { refreshToken })
+        const refreshResponse = await axios.post('/api/v1/auth/refresh', { refreshToken })
         const newToken = refreshResponse.data.token
         localStorage.setItem('token', newToken)
         processQueue(null, newToken)
@@ -233,17 +233,17 @@ export const apiService = {
     
     // 获取用户的角色
     getUserRolesApi: (userId) => {
-      return api.get(`/users/${userId}/roles`)
+      return api.get(`/roles/users/${userId}/roles`)
     },
     
     // 为用户分配角色
     assignRoleToUserApi: (userId, roleId) => {
-      return api.post(`/users/${userId}/roles`, { role_id: roleId })
+      return api.post(`/roles/users/${userId}/roles`, { role_id: roleId })
     },
     
     // 移除用户的角色
     removeRoleFromUserApi: (userId, roleId) => {
-      return api.delete(`/users/${userId}/roles/${roleId}`)
+      return api.delete(`/roles/users/${userId}/roles/${roleId}`)
     },
     
     // 获取角色权限
