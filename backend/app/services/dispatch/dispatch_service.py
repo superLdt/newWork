@@ -191,21 +191,32 @@ class DispatchService:
             if not organizing_unit_id and hasattr(current_user, 'department_id'):
                 organizing_unit_id = current_user.department_id
                 
-            # 确保发起人部门信息正确保存
-            initiator_department = task_data.get('initiator_department', '')
+            # 确保发起人部门信息正确保存 - 始终以后端计算为准（忽略前端传入的initiator_department）
+            fe_initiator_department = task_data.get('initiator_department')
+            if fe_initiator_department:
+                logger.info(f"前端传入initiator_department={fe_initiator_department}，将忽略并以后台计算为准")
+            initiator_department = ''
+            
+            # 调试信息：打印当前用户属性
+            logger.info(f"当前用户属性: id={getattr(current_user, 'id', '无')}, dispatch_unit_id={getattr(current_user, 'dispatch_unit_id', '无')}, username={getattr(current_user, 'username', '无')}")
+            
+            # 通过用户的 dispatch_unit_id 查询派车单位名称
+            if hasattr(current_user, 'dispatch_unit_id') and current_user.dispatch_unit_id:
+                try:
+                    from app.services.dispatch_unit_service import DispatchUnitService
+                    unit_info = DispatchUnitService.get_dispatch_unit_by_id(current_user.dispatch_unit_id)
+                    if unit_info and unit_info.get('name'):
+                        initiator_department = unit_info['name']
+                        logger.info(f"从dispatch_unit_service获取部门: {initiator_department}")
+                    else:
+                        logger.warning(f"未找到ID为{current_user.dispatch_unit_id}的派车单位信息")
+                except Exception as e:
+                    logger.error(f"获取用户派车单位失败: {str(e)}")
+            
+            # 如果仍然没有获取到，使用用户名作为兜底
             if not initiator_department:
-                # 如果前端未传递，则从用户关联的派车单位获取
-                if hasattr(current_user, 'dispatch_unit_id') and current_user.dispatch_unit_id:
-                    try:
-                        unit_obj = DispatchUnit.query.get(current_user.dispatch_unit_id)
-                        initiator_department = unit_obj.name if unit_obj else ''
-                    except Exception as e:
-                        logger.error(f"获取用户派车单位失败: {str(e)}")
-                        initiator_department = ''
-                
-                # 如果仍然没有获取到，尝试从department_name获取
-                if not initiator_department and hasattr(current_user, 'department_name'):
-                    initiator_department = current_user.department_name
+                initiator_department = getattr(current_user, 'username', str(current_user.id))
+                logger.info(f"未获得派车单位名称，使用用户名兜底: {initiator_department}")
             
             # 创建任务对象
             task = ManualDispatchTask(
