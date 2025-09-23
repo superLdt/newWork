@@ -202,6 +202,37 @@ export const vehicleCapacityReferenceService = {
   },
 
   /**
+   * 获取可用车厢列表
+   * @returns {Promise} - 返回可用车厢列表
+   */
+  async getAvailableCarriages() {
+    try {
+      const response = await apiClient.get('/vehicle-capacity-reference/available-carriages')
+      
+      if (response.code === 0 || response.code === 200 || response.success) {
+        return {
+          code: 0,
+          message: response.message || '获取成功',
+          data: response.data || response
+        }
+      } else {
+        return {
+          code: response.code || 1,
+          message: response.message || '获取可用车厢失败',
+          data: null
+        }
+      }
+    } catch (error) {
+      console.error('获取可用车厢失败:', error)
+      return {
+        code: error.code || 500,
+        message: error.message || 'Network Error',
+        data: null
+      }
+    }
+  },
+
+  /**
    * 搜索车辆
    * @param {Object} params - 搜索参数
    * @param {string} params.license_plate - 车牌号

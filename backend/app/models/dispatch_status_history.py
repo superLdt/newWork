@@ -14,6 +14,10 @@ class DispatchStatusHistory(db.Model):
     operator = db.Column(db.String(100), comment='操作人')
     timestamp = db.Column(db.String(20), comment='时间戳')
     note = db.Column(db.Text, comment='备注')
+    # 新增字段：下一阶段操作人角色
+    next_handler_role = db.Column(db.String(50), comment='下一阶段操作人角色')
+    # 新增字段：下一阶段操作人ID
+    next_handler_user_id = db.Column(db.Integer, comment='下一阶段操作人ID')
     
     def __repr__(self):
         return f'<DispatchStatusHistory {self.task_id}: {self.status_change}>'
@@ -30,5 +34,7 @@ class DispatchStatusHistory(db.Model):
             'status_change': self.status_change,
             'operator': self.operator,
             'timestamp': self.timestamp,
-            'note': self.note
+            'note': self.note,
+            'next_handler_role': self.next_handler_role,
+            'next_handler_user_id': self.next_handler_user_id
         }

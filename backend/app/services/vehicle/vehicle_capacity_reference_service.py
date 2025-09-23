@@ -391,6 +391,25 @@ class VehicleCapacityReferenceService:
             raise
     
     @staticmethod
+    def get_available_carriages() -> List[Dict]:
+        """
+        获取可用车厢列表（车厢号不为空的记录）
+        
+        Returns:
+            List[Dict]: 可用车厢列表
+        """
+        try:
+            carriages = VehicleCapacityReference.query.filter(
+                VehicleCapacityReference.status == 'active',
+                VehicleCapacityReference.carriage_number.isnot(None),
+                VehicleCapacityReference.carriage_number != ''
+            ).all()
+            return [carriage.to_dict() for carriage in carriages]
+        except SQLAlchemyError as e:
+            logger.error(f"获取可用车厢列表失败: {str(e)}")
+            raise
+    
+    @staticmethod
     def search_vehicles(license_plate: str = None, carriage_number: str = None) -> List[Dict]:
         """
         搜索车辆

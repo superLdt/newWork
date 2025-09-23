@@ -64,8 +64,8 @@
         </el-select>
       </el-form-item>
       
-      <el-form-item label="标准吨位" prop="standard_weight">
-        <el-select v-model="taskForm.standard_weight" placeholder="请选择标准吨位" style="width: 100%" @change="handleWeightChange">
+      <el-form-item label="需求吨位" prop="required_weight">
+        <el-select v-model="taskForm.required_weight" placeholder="请选择需求吨位" style="width: 100%" @change="handleWeightChange">
           <el-option
             v-for="item in weightOptions"
             :key="item.value"
@@ -75,15 +75,15 @@
         </el-select>
       </el-form-item>
       
-      <el-form-item label="标准容积" prop="standard_volume">
-        <el-input v-model="taskForm.standard_volume" disabled placeholder="自动计算" style="width: 100%">
+      <el-form-item label="需求容积" prop="required_volume">
+        <el-input v-model="taskForm.required_volume" disabled placeholder="自动计算" style="width: 100%">
           <template #append>m³</template>
         </el-input>
       </el-form-item>
       
-      <el-form-item label="实际需求容积" prop="actual_volume">
+      <el-form-item label="需求容积" prop="required_volume">
         <el-input-number 
-          v-model="taskForm.actual_volume" 
+          v-model="taskForm.required_volume" 
           :min="0" 
           :precision="0" 
           :step="1" 
@@ -139,6 +139,8 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePermissionStore } from '@/stores/permission'
+import { createTask } from '@/services/dispatchService'
+import tonnageVolumeService from '@/services/tonnageVolumeService'
 
 export default {
   name: 'CreateTask',
@@ -175,8 +177,9 @@ export default {
       organizing_unit: '',
       transport_type: '',
       requirement_type: '',
-      standard_weight: '',
-      standard_volume: 0,
+      required_weight: '',
+      required_volume: 0,
+      actual_weight: '',
       actual_volume: 0,
       dispatch_track: '',
       special_requirements: '',
@@ -204,13 +207,13 @@ export default {
       requirement_type: [
         { required: true, message: '请选择需求类型', trigger: 'change' }
       ],
-      standard_weight: [
-        { required: true, message: '请选择标准吨位', trigger: 'change' }
+      required_weight: [
+        { required: true, message: '请选择需求吨位', trigger: 'change' }
       ],
-      standard_volume: [
-        { required: true, message: '标准容积自动计算', trigger: 'change' }
+      required_volume: [
+        { required: true, message: '需求容积自动计算', trigger: 'change' }
       ],
-      actual_volume: [
+      required_volume: [
         { 
           required: true, 
           message: '请输入实际需求容积', 
@@ -315,15 +318,33 @@ export default {
     ]
     
     // 吨位选择变化处理
-    const handleWeightChange = (value) => {
-      if (value && weightVolumeMapping[value]) {
-        taskForm.standard_volume = weightVolumeMapping[value]
-        // 如果实际容积小于标准容积，自动更新实际容积
-        if (taskForm.actual_volume < weightVolumeMapping[value]) {
-          taskForm.actual_volume = weightVolumeMapping[value]
+    const handleWeightChange = async (value) => {
+      if (value) {
+        try {
+          // 使用API获取吨位对应的容积信息
+          const response = await tonnageVolumeService.getVolumeByTonnage(value)
+          if (response.success && response.data) {
+            // 如果需求容积小于标准容积，自动更新需求容积
+            if (taskForm.required_volume < response.data.standard_volume) {
+              taskForm.required_volume = response.data.standard_volume
+            }
+          } else {
+            // 如果API调用失败，使用本地映射作为备选
+            if (weightVolumeMapping[value]) {
+              if (taskForm.required_volume < weightVolumeMapping[value]) {
+                taskForm.required_volume = weightVolumeMapping[value]
+              }
+            }
+          }
+        } catch (error) {
+          console.error('获取吨位容积映射失败:', error)
+          // API调用失败时使用本地映射
+          if (weightVolumeMapping[value]) {
+            if (taskForm.required_volume < weightVolumeMapping[value]) {
+              taskForm.required_volume = weightVolumeMapping[value]
+            }
+          }
         }
-      } else {
-        taskForm.standard_volume = 0
       }
     }
     

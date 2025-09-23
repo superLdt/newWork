@@ -185,6 +185,7 @@ class Menu(db.Model):
             {'name': '车辆管理', 'code': 'vehicle_management', 'path': '/basic-data/vehicles', 'component': 'pages/basic-data/VehicleManagement', 'icon': 'el-icon-truck', 'parent_code': 'basic_data', 'sort_order': 1},
             {'name': '司机管理', 'code': 'driver_management', 'path': '/basic-data/drivers', 'component': 'pages/basic-data/DriverManagement', 'icon': 'el-icon-user', 'parent_code': 'basic_data', 'sort_order': 2},
             {'name': '客户管理', 'code': 'customer_management', 'path': '/basic-data/customers', 'component': 'pages/basic-data/CustomerManagement', 'icon': 'el-icon-office-building', 'parent_code': 'basic_data', 'sort_order': 3},
+            {'name': '吨位容积对应管理', 'code': 'tonnage_volume_mapping', 'path': '/basic-data/tonnage-volume-mapping', 'component': 'pages/basic-data/TonnageVolumeMapping', 'icon': 'el-icon-data-board', 'parent_code': 'basic_data', 'sort_order': 4},
             
             # 调度管理子菜单
             {'name': '运输订单', 'code': 'transport_orders', 'path': '/dispatch/orders', 'component': 'pages/dispatch/TransportOrders', 'icon': 'el-icon-document', 'parent_code': 'dispatch', 'sort_order': 1},

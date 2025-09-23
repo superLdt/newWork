@@ -46,7 +46,9 @@ class DispatchStatusManager:
             '待供应商响应': 'approved',
             '供应商已响应': 'in_progress',
             # 修正：通用“待响应”应视为审核通过阶段
-            '待响应': 'approved'
+            '待响应': 'approved',
+            # 统一：通用“已响应”视为进入进行中阶段
+            '已响应': 'in_progress'
         }
         # 已经是英文代码或未识别的状态原样返回
         return mapping.get(status, status)
@@ -103,6 +105,22 @@ class DispatchStatusManager:
         if not DispatchStatusManager.validate_status_transition(current_status, new_status):
             raise ValueError(f"不允许从 {current_status} 转换到 {new_status}")
         
+        # 识别操作者角色
+        operator_role = None
+        try:
+            if hasattr(g, 'current_user') and g.current_user and g.current_user.roles:
+                operator_role = g.current_user.roles[0].name
+        except Exception:
+            operator_role = None
+        
+        # 计算下一阶段处理人角色
+        next_handler_role = DispatchStatusManager.get_next_handler_role(
+            previous_status=current_status,
+            new_status=new_status,
+            operator_role=operator_role or '系统',
+            business_type=task.get('business_type')
+        )
+        
         # 准备状态历史数据
         status_history_data = {
             'task_id': task_id,
@@ -110,7 +128,8 @@ class DispatchStatusManager:
             'new_status': new_status,
             'changed_by': g.current_user.id if hasattr(g, 'current_user') else None,
             'changed_at': datetime.now(),
-            'comment': comment
+            'comment': comment,
+            'next_handler_role': next_handler_role
         }
         
         # 更新任务状态并记录历史
@@ -179,3 +198,30 @@ class DispatchStatusManager:
             if choice[0] == status:
                 return choice[1]
         return status
+
+    @staticmethod
+    def get_next_handler_role(previous_status: str, new_status: str, operator_role: str, business_type: str = None) -> str:
+        """
+        统一确定“状态 → 下一阶段操作人角色”的规则，避免业务层硬编码
+        
+        参数：
+            previous_status: 变更前状态（可中文/英文）
+            new_status: 变更新状态（可中文/英文）
+            operator_role: 执行本次操作的角色（如：供应商/大容积供应商/班组长/区域调度员）
+            business_type: 业务类型（自办派车/委办派车），可选
+        返回：
+            下一阶段操作人角色
+        """
+        norm_new = DispatchStatusManager._normalize_status(new_status)
+        # 新增：审核通过阶段（含中文“待响应”规范化为 approved）由业务类型决定下一处理角色
+        if norm_new == 'approved':
+            bt = (business_type or '').strip()
+            if bt == '自办派车':
+                return '班组长'
+            # 默认（含委办派车）：供应商
+            return '供应商'
+        # 统一：凡是“响应派车”进入进行中（含中文“已响应”规范化后）——下一处理人一律为“车间地调”
+        if norm_new == 'in_progress':
+            return '车间地调'
+        # 默认回退规则（非上述场景）
+        return '区域调度员'

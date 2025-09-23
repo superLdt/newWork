@@ -10,6 +10,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from typing import Dict, List, Optional, Tuple, Any
 import logging
 import uuid
+from app.models.company import DispatchUnit
+from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
 
@@ -20,28 +22,28 @@ class DispatchService:
     """
     
     @staticmethod
-    def _is_large_capacity_vehicle(standard_weight: str) -> bool:
+    def _is_large_capacity_vehicle(required_weight: str) -> bool:
         """
-        判断是否为大容积车辆（标准吨位>=30吨）
+        判断是否为大容积车辆（需求吨位>=30吨）
         
         Args:
-            standard_weight: 标准吨位字符串，如"30吨"
+            required_weight: 需求吨位字符串，如"30吨"
             
         Returns:
             bool: 是否为大容积车辆
         """
-        if not standard_weight:
+        if not required_weight:
             return False
         
         # 提取数字部分
         try:
-            weight_num = int(standard_weight.replace('吨', '').replace('A', '').replace('B', ''))
+            weight_num = int(required_weight.replace('吨', '').replace('A', '').replace('B', ''))
             return weight_num >= 30
         except (ValueError, AttributeError):
             return False
     
     @staticmethod
-    def get_task_list(page: int = 1, per_page: int = 10, filters: Dict = None) -> Tuple[List[Dict], int]:
+    def get_task_list(page: int = 1, per_page: int = 10, filters: Optional[Dict] = None) -> Tuple[List[Dict], int]:
         """
         获取派车任务列表
         
@@ -60,16 +62,35 @@ class DispatchService:
             # 权限过滤：根据用户角色和关联单位过滤任务
             current_user = getattr(g, 'current_user', None)
             if current_user:
-                user_roles = [role.name for role in current_user.roles] if current_user.roles else []
+                user_roles = [role.name for role in current_user.roles] if hasattr(current_user, 'roles') else []
                 
                 # 超级管理员和区域调度员可以看到全部任务
                 if not ('超级管理员' in user_roles or '区域调度员' in user_roles):
-                    # 其他角色只能看到与自己关联单位的任务
-                    if current_user.dispatch_unit_id:
-                        query_obj = query_obj.filter(ManualDispatchTask.organizing_unit_id == current_user.dispatch_unit_id)
+                    # 其他角色：可见范围 = 本单位为组开单位 OR 本人发起 OR 本单位发起（按名称）
+                    unit_id = getattr(current_user, 'dispatch_unit_id', None)
+                    unit_name = None
+                    if unit_id:
+                        try:
+                            unit_obj = DispatchUnit.query.get(unit_id)
+                            unit_name = unit_obj.name if unit_obj else None
+                        except Exception:
+                            unit_name = None
+                    conditions = []
+                    if unit_id:
+                        conditions.append(ManualDispatchTask.organizing_unit_id == unit_id)
+                    # 允许本人发起的任务可见
+                    conditions.append(ManualDispatchTask.initiator_user_id == getattr(current_user, 'id', None))
+                    # 允许本单位发起（名称匹配）
+                    if unit_name:
+                        conditions.append(ManualDispatchTask.initiator_department == unit_name)
+                    # 允许当前处理角色匹配用户任一角色（如车间地调）
+                    if user_roles:
+                        conditions.append(ManualDispatchTask.current_handler_role.in_(user_roles))
+                    if conditions:
+                        query_obj = query_obj.filter(or_(*conditions))
                     else:
-                        # 如果用户没有关联单位，则看不到任何任务
-                        query_obj = query_obj.filter(ManualDispatchTask.task_id == None)  # 返回空结果
+                        # 如果无任何可用条件，则返回空结果
+                        query_obj = query_obj.filter(ManualDispatchTask.task_id == None)
             
             # 应用其他过滤条件
             if filters:
@@ -79,28 +100,14 @@ class DispatchService:
                     query_obj = query_obj.filter(ManualDispatchTask.mail_route_name.ilike(f"%{filters['mail_route_name']}%"))
                 if filters.get('origin_bureau'):
                     query_obj = query_obj.filter(ManualDispatchTask.origin_bureau.ilike(f"%{filters['origin_bureau']}%"))
-                if filters.get('required_date_start') and filters.get('required_date_end'):
-                    query_obj = query_obj.filter(
-                        ManualDispatchTask.required_date >= filters['required_date_start'],
-                        ManualDispatchTask.required_date <= filters['required_date_end']
-                    )
-                if filters.get('initiator_user_id'):
-                    query_obj = query_obj.filter(ManualDispatchTask.initiator_user_id == filters['initiator_user_id'])
-                if filters.get('current_handler_role'):
-                    query_obj = query_obj.filter(ManualDispatchTask.current_handler_role == filters['current_handler_role'])
+                if filters.get('organizing_unit_id'):
+                    query_obj = query_obj.filter(ManualDispatchTask.organizing_unit_id == filters['organizing_unit_id'])
+                if filters.get('dispatch_track'):
+                    query_obj = query_obj.filter(ManualDispatchTask.dispatch_track == filters['dispatch_track'])
             
-            # 按创建时间降序排序
-            query_obj = query_obj.order_by(db.desc(ManualDispatchTask.created_at))
-            
-            # 分页
-            pagination = query_obj.paginate(page=page, per_page=per_page, error_out=False)
-            tasks = pagination.items
-            total = pagination.total
-            
-            # 转换为字典列表
-            task_list = [task.to_dict() for task in tasks]
-            
-            return task_list, total
+            pagination = query_obj.order_by(ManualDispatchTask.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+            tasks = [task.to_dict() for task in pagination.items]
+            return tasks, pagination.total
         except SQLAlchemyError as e:
             logger.error(f"获取派车任务列表失败: {str(e)}")
             raise
@@ -126,151 +133,141 @@ class DispatchService:
             raise
     
     @staticmethod
-    def create_task(task_data: Dict) -> Dict:
+    def create_task(task_data: Dict[str, Any], current_user: Any) -> Dict[str, Any]:
         """
-        创建新派车任务
+        创建派车任务
         
         Args:
             task_data: 任务数据
+            current_user: 当前用户
             
         Returns:
-            Dict: 创建的任务信息
+            Dict: 创建结果
         """
+        from app.models.task import ManualDispatchTask
+        from app.models.dispatch_status_history import DispatchStatusHistory
+        from app.models.dispatch.operation_log import OperationLog
+        from app.extensions import db
+        from datetime import datetime
+        import uuid
+        
         try:
-            from flask import g
-            
             # 生成任务ID
-            task_id = f"T{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6].upper()}"
+            task_id = f"T{datetime.now().strftime('%Y%m%d%H%M%S')}{str(uuid.uuid4())[:6]}"
             
-            # 获取当前用户信息
-            current_user = getattr(g, 'current_user', None)
-            current_user_id = current_user.id if current_user else task_data.get('initiator_user_id', 1)
+            # 获取用户角色
+            user_roles = [role.name for role in current_user.roles] if hasattr(current_user, 'roles') else []
+            primary_role = user_roles[0] if user_roles else '未知角色'
             
-            # 获取当前用户角色（取第一个角色作为主要角色）
-            current_user_role = None
-            if current_user and current_user.roles:
-                current_user_role = current_user.roles[0].name
-            else:
-                current_user_role = task_data.get('initiator_role', '车间地调')
-            
-            # 确定派车轨道和初始状态
-            dispatch_track = task_data.get('dispatch_track', '轨道A')
-            requirement_type = task_data.get('requirement_type', '加班派车')
-            
-            # 获取业务类型和标准吨位
-            business_type = task_data.get('business_type', '委办派车')
-            standard_weight = task_data.get('standard_weight', '')
-            
-            # 根据用户角色和业务类型确定轨道和状态
-            if current_user_role == '车间地调':
-                # 车间地调只能使用轨道A，需要审核
-                dispatch_track = '轨道A'
+            # 根据角色确定初始状态和轨道
+            if primary_role in ['车间地调', 'workshop_dispatcher']:
+                # 车间地调创建的任务需要审核
                 initial_status = '待审核'
-                audit_required = True
+                dispatch_track = 'A'  # 车间地调只能使用轨道A，需要审核
                 current_handler_role = '区域调度员'
-            elif current_user_role in ['超级管理员', '区域调度员']:
-                # 管理员和区域调度员可以选择轨道
-                if requirement_type == '正班派车':
-                    # 正班派车直接下发，使用轨道B
-                    dispatch_track = '轨道B'
-                    if business_type == '自办派车':
-                        # 自办派车根据标准吨位决定处理人
-                        if DispatchService._is_large_capacity_vehicle(standard_weight):
-                            initial_status = '待响应'
-                            current_handler_role = '外包管理公司'
-                        else:
-                            initial_status = '待响应'
-                            current_handler_role = '班组长'
-                    else:
-                        # 委办派车
-                        initial_status = '待供应商响应'
-                        current_handler_role = '供应商'
-                    audit_required = False
-                else:
-                    # 加班派车根据选择的轨道确定流程
-                    if dispatch_track == '轨道A':
-                        initial_status = '待审核'
-                        audit_required = True
-                        current_handler_role = '区域调度员'
-                    else:  # 轨道B
-                        if business_type == '自办派车':
-                            # 自办派车根据标准吨位决定处理人
-                            if DispatchService._is_large_capacity_vehicle(standard_weight):
-                                initial_status = '待响应'
-                                current_handler_role = '外包管理公司'
-                            else:
-                                initial_status = '待响应'
-                                current_handler_role = '班组长'
-                        else:
-                            # 委办派车
-                            initial_status = '待供应商响应'
-                            current_handler_role = '供应商'
-                        audit_required = False
+            elif primary_role in ['区域调度员', 'regional_dispatcher']:
+                # 区域调度员可以选择轨道
+                dispatch_track = task_data.get('dispatch_track', 'A')
+                if dispatch_track == 'A':
+                    initial_status = '待审核'
+                    current_handler_role = '区域调度员'
+                else:  # 轨道B
+                    initial_status = '待响应'
+                    current_handler_role = '供应商'
+            elif primary_role in ['超级管理员', 'super_admin']:
+                # 超级管理员可以选择轨道
+                dispatch_track = task_data.get('dispatch_track', 'A')
+                if dispatch_track == 'A':
+                    initial_status = '待审核'
+                    current_handler_role = '区域调度员'
+                else:  # 轨道B
+                    initial_status = '待响应'
+                    current_handler_role = '供应商'
             else:
-                # 其他角色默认使用轨道A
-                dispatch_track = '轨道A'
-                initial_status = '待审核'
-                audit_required = True
-                current_handler_role = '区域调度员'
+                raise ValueError(f'角色 {primary_role} 无权限创建派车任务')
             
-            # 创建任务对象，确保所有字段都正确映射
+            # 自办派车兜底逻辑：如果没有组开单位，设置为当前用户所属单位
+            organizing_unit_id = task_data.get('organizing_unit_id')
+            if not organizing_unit_id and hasattr(current_user, 'department_id'):
+                organizing_unit_id = current_user.department_id
+                
+            # 确保发起人部门信息正确保存
+            initiator_department = task_data.get('initiator_department', '')
+            if not initiator_department:
+                # 如果前端未传递，则从用户关联的派车单位获取
+                if hasattr(current_user, 'dispatch_unit_id') and current_user.dispatch_unit_id:
+                    try:
+                        unit_obj = DispatchUnit.query.get(current_user.dispatch_unit_id)
+                        initiator_department = unit_obj.name if unit_obj else ''
+                    except Exception as e:
+                        logger.error(f"获取用户派车单位失败: {str(e)}")
+                        initiator_department = ''
+                
+                # 如果仍然没有获取到，尝试从department_name获取
+                if not initiator_department and hasattr(current_user, 'department_name'):
+                    initiator_department = current_user.department_name
+            
+            # 创建任务对象
             task = ManualDispatchTask(
                 task_id=task_id,
-                required_date=task_data.get('required_date'),
-                origin_bureau=task_data.get('origin_bureau'),
-                mail_route_name=task_data.get('mail_route_name'),
-                organizing_unit=task_data.get('organizing_unit'),
-                organizing_unit_id=task_data.get('organizing_unit_id'),
-                transport_type=task_data.get('transport_type'),
-                requirement_type=requirement_type,
-                standard_weight=task_data.get('standard_weight'),
-                standard_volume=task_data.get('standard_volume'),
-                actual_volume=task_data.get('actual_volume'),
-                special_requirements=task_data.get('special_requirements'),
-                status=task_data.get('status', initial_status),
-                dispatch_track=dispatch_track,
-                initiator_role=current_user_role,
-                initiator_user_id=current_user_id,
-                initiator_department=task_data.get('initiator_department'),
-                audit_required=audit_required,
+                mail_route_name=task_data['mail_route_name'],
+                required_date=task_data['required_date'],
+                origin_bureau=task_data['origin_bureau'],
+                transport_type=task_data['transport_type'],
+                required_weight=task_data['required_weight'],
+                required_volume=task_data['required_volume'],
+                special_requirements=task_data.get('special_requirements', ''),
+                organizing_unit_id=organizing_unit_id,
+                organizing_unit=task_data.get('organizing_unit', ''),
+                requirement_type=task_data.get('requirement_type', ''),
+                initiator_user_id=current_user.id,
+                # 确保initiator_department使用正确的值
+                initiator_department=initiator_department,
+                initiator_role=primary_role,
+                status=initial_status,
                 current_handler_role=current_handler_role,
-                business_type=task_data.get('business_type', '委办派车'),
+                dispatch_track=f"轨道{dispatch_track.upper()}" if dispatch_track else "轨道A",
                 created_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 updated_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             )
             
-            # 保存到数据库
             db.session.add(task)
             
-            # 创建状态历史记录
+            # 记录状态历史 - 修复：使用模型字段 status_change/timestamp/note
             status_history = DispatchStatusHistory(
                 task_id=task_id,
-                status_change='创建任务',
-                operator=f"用户ID: {current_user_id}, 角色: {current_user_role}",
+                status_change=initial_status,
+                operator=getattr(current_user, 'username', str(current_user.id)),
                 timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                note=f'任务创建，轨道: {dispatch_track}，初始状态: {initial_status}'
+                note=f'创建派车任务，轨道{dispatch_track}',
+                next_handler_role=current_handler_role
             )
             db.session.add(status_history)
             
-            # 创建操作日志
+            # 记录操作日志
             operation_log = OperationLog(
                 task_id=task_id,
+                user_id=current_user.id,
+                user_role=primary_role,
                 operation_type='创建任务',
-                user_id=current_user_id,
-                user_role=current_user_role,
-                operation_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                operation_content='创建派车任务',
-                ip_address=task_data.get('ip_address')
+                operation_content=f'创建派车任务：{task_data["mail_route_name"]}'
             )
             db.session.add(operation_log)
             
+            # 提交事务
             db.session.commit()
             
-            return task.to_dict()
-        except SQLAlchemyError as e:
+            return {
+                'task_id': task_id,
+                'status': initial_status,
+                'current_handler_role': current_handler_role,
+                'dispatch_track': dispatch_track,
+                'message': '派车任务创建成功'
+            }
+            
+        except Exception as e:
             db.session.rollback()
-            logger.error(f"创建派车任务失败: {str(e)}")
-            raise
+            raise e
     
     @staticmethod
     def update_task(task_id: str, update_data: Dict) -> Dict:
@@ -303,12 +300,26 @@ class DispatchService:
             
             # 如果状态发生变化，创建状态历史记录
             if 'status' in update_data and old_status != update_data['status']:
+                # 统一通过状态管理器计算下一处理角色
+                try:
+                    from app.business.dispatch.status_manager import DispatchStatusManager
+                    computed_next_handler_role = DispatchStatusManager.get_next_handler_role(
+                        previous_status=old_status,
+                        new_status=update_data['status'],
+                        operator_role=update_data.get('current_handler_role'),
+                        business_type=getattr(task, 'business_type', None)
+                    )
+                except Exception:
+                    # 回退策略：若计算失败，保持与原有行为一致，避免阻断流程
+                    computed_next_handler_role = update_data.get('current_handler_role')
+                
                 status_history = DispatchStatusHistory(
                     task_id=task_id,
                     status_change=f"{old_status} -> {update_data['status']}",
                     operator=f"用户ID: {update_data.get('current_handler_user_id', '系统')}",
                     timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    note=update_data.get('note', '')
+                    note=update_data.get('note', ''),
+                    next_handler_role=computed_next_handler_role
                 )
                 db.session.add(status_history)
                 
@@ -591,7 +602,7 @@ class DispatchService:
     # 添加别名方法和缺失方法，用于与控制器及业务层命名对齐
     
     @staticmethod
-    def get_dispatch_task_list(page: int = 1, per_page: int = 10, filters: Dict = None) -> Tuple[List[Dict], int]:
+    def get_dispatch_task_list(page: int = 1, per_page: int = 10, filters: Optional[Dict] = None) -> Tuple[List[Dict], int]:
         """
         获取派车任务列表（控制器调用的别名方法）
         """
@@ -605,18 +616,18 @@ class DispatchService:
         return DispatchService.get_task_by_id(task_id)
     
     @staticmethod
-    def create_dispatch_task(task_data: Dict) -> Dict:
-        """
-        创建新派车任务（控制器调用的别名方法）
-        """
-        return DispatchService.create_task(task_data)
-    
-    @staticmethod
     def update_dispatch_task(task_id: str, update_data: Dict) -> Dict:
         """
         更新派车任务信息（控制器调用的别名方法）
         """
         return DispatchService.update_task(task_id, update_data)
+    
+    @staticmethod
+    def create_dispatch_task(task_data: Dict, current_user: Any) -> Dict:
+        """
+        创建新派车任务（控制器调用的别名方法）
+        """
+        return DispatchService.create_task(task_data, current_user)
     
     @staticmethod
     def assign_vehicle_to_task(task_id: str, vehicle_data: Dict) -> Dict:
@@ -697,7 +708,7 @@ class DispatchService:
             raise
     
     @staticmethod
-    def update_task_status(task_id: str, new_status: str, status_history_data: Dict = None) -> Dict:
+    def update_task_status(task_id: str, new_status: str, status_history_data: Optional[Dict] = None) -> Dict:
         """
         更新任务状态并记录历史
         
@@ -727,7 +738,8 @@ class DispatchService:
                     status_change=f"{status_history_data.get('previous_status', old_status)} -> {new_status}",
                     operator=f"用户ID: {status_history_data.get('changed_by', '系统')}",
                     timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    note=status_history_data.get('comment', '')
+                    note=status_history_data.get('comment', ''),
+                    next_handler_role=status_history_data.get('next_handler_role')
                 )
                 db.session.add(status_history)
             

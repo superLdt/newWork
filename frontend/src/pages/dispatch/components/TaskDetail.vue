@@ -38,12 +38,13 @@
           <div class="stat-value">{{ task.transport_type }}</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">标准吨位</div>
-          <div class="stat-value">{{ task.standard_weight }}</div>
+          <div class="stat-label">需求吨位</div>
+          <div class="stat-value">{{ formattedRequiredWeight }}</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">标准容积</div>
-          <div class="stat-value">{{ task.standard_volume }} m³</div>
+          <div class="stat-label">需求容积</div>
+          <div class="stat-value">{{ task.required_volume }} m³</div>
+          <div class="stat-time" v-if="tonnageVolumeRange">容积区间: {{ tonnageVolumeRange }}</div>
         </div>
       </div>
 
@@ -107,7 +108,8 @@
           </div>
           <div class="info-row">
             <label>实际容积:</label>
-            <span>{{ task.actual_volume }} m³</span>
+            <span>{{ task.required_volume }} m³</span>
+            <span v-if="tonnageVolumeRange"> (容积区间: {{ tonnageVolumeRange }})</span>
           </div>
         </div>
       </div>
@@ -206,6 +208,13 @@
               <div class="timeline-info">
                 <div class="operator">操作人: {{ userFullNames[normalizeUserId(history.operator)] || normalizeUserId(history.operator) }}</div>
                 <div class="comment" v-if="history.comment">{{ history.comment }}</div>
+                <!-- 增强功能：显示下一阶段操作人信息 -->
+                <div class="next-operator" v-if="history.next_handler_role">
+                  下一阶段操作人角色: {{ history.next_handler_role }}
+                </div>
+                <div class="next-operator" v-else-if="getNextHandlerRole(history.status)">
+                  下一阶段操作人角色: {{ getNextHandlerRole(history.status) }}
+                </div>
               </div>
             </div>
           </el-timeline-item>
@@ -236,6 +245,67 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 车间地调核实核实操作对话框 -->
+    <el-dialog
+      v-model="workshopVerificationDialogVisible"
+      title="车间地调核实操作"
+      width="600px"
+    >
+      <el-form :model="workshopVerificationForm" label-width="100px">
+        <el-form-item label="操作类型" required>
+          <el-radio-group v-model="workshopVerificationForm.action">
+            <el-radio label="verify_pass">核实通过</el-radio>
+            <el-radio label="downgrade">降档处理</el-radio>
+            <el-radio label="merge">合并任务</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        
+        <!-- 降档处理时显示 -->
+        <el-form-item 
+          v-if="workshopVerificationForm.action === 'downgrade'" 
+          label="降档吨位" 
+          required
+        >
+          <el-input
+            v-model="workshopVerificationForm.downgradeTonnage"
+            placeholder="请输入降档后的吨位，如：8吨"
+          />
+        </el-form-item>
+        
+        <!-- 合并任务时显示 -->
+        <el-form-item 
+          v-if="workshopVerificationForm.action === 'merge'" 
+          label="合并到任务" 
+          required
+        >
+          <el-input
+            v-model="workshopVerificationForm.mergeTaskId"
+            placeholder="请输入要合并到的任务ID"
+          />
+        </el-form-item>
+        
+        <el-form-item label="操作备注">
+          <el-input
+            v-model="workshopVerificationForm.comment"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入操作备注..."
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="workshopVerificationDialogVisible = false">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="confirmWorkshopVerification" 
+          :loading="submitting"
+          :disabled="!workshopVerificationForm.action"
+        >
+          确认操作
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -250,6 +320,7 @@ import { usePermissionStore } from '@/stores/permission'
 import { apiService } from '@/services/api'
 import SupplierResponseForm from './SupplierResponseForm.vue'
 import { useUserStore } from '@/stores/user'
+import tonnageVolumeService from '@/services/tonnageVolumeService'
 
 export default {
   name: 'TaskDetail',
@@ -276,17 +347,63 @@ export default {
     const userStore = useUserStore()
     const actionDialogVisible = ref(false)
     const supplierResponseDialogVisible = ref(false)
+    const workshopVerificationDialogVisible = ref(false) // 车间地调核实操作对话框
     const currentAction = ref(null)
     const submitting = ref(false)
     const loadingActions = reactive({})
     const userFullNames = reactive({}) // 用于存储用户ID到姓名的映射
+    const tonnageVolumeData = ref(null) // 吨位容积数据
+
+    // 车间地调核实操作表单
+    const workshopVerificationForm = reactive({
+      action: '', // 'verify_pass', 'downgrade', 'merge'
+      comment: '',
+      mergeTaskId: '', // 合并时的目标任务ID
+      downgradeTonnage: '' // 降档时的新吨位
+    })
+
+    // 格式化需求吨位显示
+    const formattedRequiredWeight = computed(() => {
+      if (!props.task.required_weight) return ''
+      // 移除重复的"吨"字，如"40吨A吨"改为"40吨A"，"8吨吨"改为"8吨"
+      return props.task.required_weight.replace(/吨.*吨$/, '吨')
+    })
+
+    // 获取吨位对应的容积区间
+    const tonnageVolumeRange = computed(() => {
+      if (!tonnageVolumeData.value || !props.task.required_weight) return ''
+      
+      const data = tonnageVolumeData.value
+      if (data.min_volume !== undefined && data.max_volume !== undefined) {
+        if (data.max_volume === null) {
+          return `${data.min_volume}m³以上`
+        }
+        return `${data.min_volume}-${data.max_volume}m³`
+      }
+      return ''
+    })
+
+    // 加载吨位容积数据
+    const loadTonnageVolumeData = async () => {
+      if (!props.task.required_weight) return
+      
+      try {
+        const response = await tonnageVolumeService.getVolumeByTonnage(props.task.required_weight)
+        if (response && response.data) {
+          tonnageVolumeData.value = response.data
+        }
+      } catch (error) {
+        console.error('获取吨位容积数据失败:', error)
+      }
+    }
 
     // 规范化提取用户ID：从任意字符串中提取第一个数字序列
     const normalizeUserId = (raw) => {
       if (raw === null || raw === undefined) return ''
       const s = String(raw)
       const m = s.match(/\d+/)
-      return m ? m[0] : s.trim()
+      // 如果找不到数字，返回原始字符串而不是空字符串
+      return m ? m[0] : s
     }
 
     // 获取用户完整姓名（兼容写法）
@@ -294,7 +411,8 @@ export default {
       if (rawId === null || rawId === undefined) return ''
       const userId = normalizeUserId(rawId)
       const rawKey = String(rawId)
-      if (!userId) return rawKey
+      // 如果没有提取到有效的用户ID（即返回的是原始字符串而不是数字），直接返回原始值
+      if (userId === rawKey) return rawKey
       // 命中缓存（用规范化后的ID）
       if (userFullNames[userId] !== undefined) return userFullNames[userId]
 
@@ -357,42 +475,71 @@ export default {
       return map[status] || status
     }
 
-    // 角色-动作映射（用于渲染不同角色在不同状态下的操作按钮）
+    // 角色-动作映射
     const roleActionMap = {
-      // 供应商在“待供应商响应/已审批”时可以进行“响应接单”
-      '供应商': [
-      -        { key: 'respond', label: '响应接单', type: 'primary', icon: Check, status: ['awaiting_supplier_response', 'approved'] }
-      +        { key: 'respond', label: '供应商响应', type: 'primary', icon: Check, status: ['awaiting_supplier_response', 'approved'] }
-      ],
-      supplier: [
-      -        { key: 'respond', label: '响应接单', type: 'primary', icon: Check, status: ['awaiting_supplier_response', 'approved'] }
-      +        { key: 'respond', label: '供应商响应', type: 'primary', icon: Check, status: ['awaiting_supplier_response', 'approved'] }
-      ],
-      // 班组长在“待班组派车”时进行派车（复用响应表单）
-      '班组长': [
-      -        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
-      +        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
-      ],
-      team_leader: [
-      -        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
-      +        { key: 'respond', label: '自备派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
-      ],
-      // 大容积供应商在“待班组派车”时进行大容积派车（复用响应表单）
-      '外包管理公司': [
-      -        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
-      +        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
-      ],
-      outsourcing_manager: [
-      -        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
-      +        { key: 'respond', label: '大容积派车', type: 'primary', icon: Promotion, status: ['awaiting_team_assignment'] }
-      ]
+      '区域调度员': {
+        '待审核': ['approve', 'reject'],
+        '审核拒绝': ['approve', 'reject']
+      },
+      '超级管理员': {
+        '待审核': ['approve', 'reject'],
+        '审核拒绝': ['approve', 'reject']
+      },
+      '供应商': {
+        '待响应': ['respond'],
+        '已响应': ['confirm'],
+        '核实通过': ['confirm'],
+        '已降档': ['respond'],
+        '已合并': ['respond']
+      },
+      '班组长': {
+        '待响应': ['respond'],
+        '已响应': ['confirm'],
+        '核实通过': ['confirm'],
+        '已降档': ['respond'],
+        '已合并': ['respond']
+      },
+      '大容积供应商': {
+        '待响应': ['respond'],
+        '已响应': ['confirm'],
+        '核实通过': ['confirm'],
+        '已降档': ['respond'],
+        '已合并': ['respond']
+      },
+      '车间地调': {
+        '已响应': ['workshop_verify'],
+        'supplier_responded': ['workshop_verify'],
+        'team_assigned': ['workshop_verify']
+      }
+    }
+
+    // 动作定义
+    const actionDefinitions = {
+      approve: { label: '审核通过', type: 'primary', icon: 'Check' },
+      reject: { label: '审核拒绝', type: 'danger', icon: 'Close' },
+      respond: { label: '响应任务', type: 'success', icon: 'Message' },
+      confirm: { label: '确认发车', type: 'warning', icon: 'CircleCheck' },
+      workshop_verify: { label: '核实操作', type: 'primary', icon: 'View' }
     }
 
     // 可用操作按钮
     const availableActions = computed(() => {
-      const actions = roleActionMap[currentUserRole.value] || []
-      const taskStatus = normalizeStatus(props.task.status)
-      return actions.filter(action => (action.status || []).map(normalizeStatus).includes(taskStatus))
+      if (!props.task || !currentUserRole.value) return []
+      
+      const userRole = currentUserRole.value
+      const taskStatus = props.task.status
+      
+      // 获取当前角色在当前状态下可执行的动作
+      const roleActions = roleActionMap[userRole]
+      if (!roleActions) return []
+      
+      const availableActionKeys = roleActions[taskStatus] || []
+      
+      // 将动作键转换为完整的动作对象
+      return availableActionKeys.map(actionKey => ({
+        key: actionKey,
+        ...actionDefinitions[actionKey]
+      })).filter(action => action.label) // 过滤掉未定义的动作
     })
 
     const hasAvailableActions = computed(() => availableActions.value.length > 0)
@@ -451,7 +598,7 @@ export default {
           '车间地调': '等待超级管理员或区域调度员审核',
           '供应商': '等待审核',
           '班组长': '等待审核',
-          '外包管理公司': '等待审核',
+          '大容积供应商': '等待审核',
           regional_dispatcher: '请审核此任务',
           supplier: '等待区域调度员审核',
           team_leader: '等待区域调度员审核',
@@ -464,7 +611,7 @@ export default {
           '车间地调': '等待供应商响应',
           '供应商': '请响应此委办任务',
           '班组长': '等待供应商响应',
-          '外包管理公司': '等待供应商响应',
+          '大容积供应商': '等待供应商响应',
           regional_dispatcher: '等待供应商响应',
           supplier: '请响应此任务',
           team_leader: '等待供应商响应',
@@ -477,7 +624,7 @@ export default {
           '车间地调': '等待班组或大容积供应商派车',
           '供应商': '等待班组或大容积供应商派车',
           '班组长': '请派遣自办车辆',
-          '外包管理公司': '请派遣大容积车辆',
+          '大容积供应商': '请派遣大容积车辆',
           regional_dispatcher: '等待班组派车',
           supplier: '等待班组派车',
           team_leader: '请派遣车辆',
@@ -490,7 +637,7 @@ export default {
           '车间地调': '供应商已响应，等待进一步处理',
           '供应商': '已响应任务',
           '班组长': '供应商已响应',
-          '外包管理公司': '供应商已响应'
+          '大容积供应商': '供应商已响应'
         },
         team_assigned: {
           '超级管理员': '班组已派车，等待进一步处理',
@@ -498,7 +645,7 @@ export default {
           '车间地调': '班组已派车，等待进一步处理',
           '供应商': '班组已派车',
           '班组长': '已派遣车辆',
-          '外包管理公司': '班组已派车'
+          '大容积供应商': '班组已派车'
         },
         approved: {
           regional_dispatcher: '任务已审批，等待响应',
@@ -592,6 +739,9 @@ export default {
         if (actionKey === 'respond') {
           // 打开供应商响应表单
           supplierResponseDialogVisible.value = true
+        } else if (actionKey === 'workshop_verify') {
+          // 打开车间地调核实操作对话框
+          workshopVerificationDialogVisible.value = true
         } else {
           actionForm.comment = ''
           actionDialogVisible.value = true
@@ -633,7 +783,7 @@ export default {
         return '供应商响应'
       } else if (userRole === '班组长' || userRole === 'team_leader') {
         return '自备派车'
-      } else if (userRole === '外包管理公司' || userRole === 'outsourcing_manager') {
+      } else if (userRole === '大容积供应商' || userRole === 'large_capacity_supplier') {
         return '大容积派车'
       }
       return '响应任务'
@@ -651,12 +801,102 @@ export default {
       supplierResponseDialogVisible.value = false
     }
 
+    // 确认车间地调核实操作
+    const confirmWorkshopVerification = async () => {
+      if (!workshopVerificationForm.action) {
+        ElMessage.warning('请选择操作类型')
+        return
+      }
+
+      // 验证必填字段
+      if (workshopVerificationForm.action === 'downgrade' && !workshopVerificationForm.downgradeTonnage) {
+        ElMessage.warning('请输入降档吨位')
+        return
+      }
+
+      if (workshopVerificationForm.action === 'merge' && !workshopVerificationForm.mergeTaskId) {
+        ElMessage.warning('请输入要合并到的任务ID')
+        return
+      }
+
+      submitting.value = true
+
+      try {
+        const requestData = {
+          task_id: props.task.id,
+          action: workshopVerificationForm.action,
+          comment: workshopVerificationForm.comment
+        }
+
+        // 根据操作类型添加额外参数
+        if (workshopVerificationForm.action === 'downgrade') {
+          requestData.downgrade_tonnage = workshopVerificationForm.downgradeTonnage
+        } else if (workshopVerificationForm.action === 'merge') {
+          requestData.merge_task_id = workshopVerificationForm.mergeTaskId
+        }
+
+        const response = await apiService.post('/api/v1/dispatch/workshop-verification', requestData)
+        
+        if (response.success) {
+          const actionLabels = {
+            'verify_pass': '核实通过',
+            'downgrade': '降档处理',
+            'merge': '合并任务'
+          }
+          
+          ElMessage.success(`${actionLabels[workshopVerificationForm.action]}成功`)
+          workshopVerificationDialogVisible.value = false
+          
+          // 重置表单
+          workshopVerificationForm.action = ''
+          workshopVerificationForm.comment = ''
+          workshopVerificationForm.mergeTaskId = ''
+          workshopVerificationForm.downgradeTonnage = ''
+          
+          // 通知父组件刷新数据
+          emit('task-updated', {
+            action: 'workshop_verification',
+            result: response.data
+          })
+        } else {
+          ElMessage.error(response.message || '操作失败')
+        }
+      } catch (error) {
+        console.error('车间地调核实操作失败:', error)
+        ElMessage.error('操作失败，请稍后重试')
+      } finally {
+        submitting.value = false
+      }
+    }
+
+    // 获取下一阶段操作人角色
+    const getNextHandlerRole = (status) => {
+      const statusMap = {
+        '待审核': '区域调度员',
+        '已审批': '供应商',
+        '待供应商响应': '供应商',
+        '待班组派车': '班组长',
+        '供应商已响应': '区域调度员',
+        '班组已派车': '区域调度员',
+        '已分配': '车间地调',
+        '已确认': '外包管理公司',
+        '最终确认': '车间地调',
+        '已发车': '已完成',
+        '已完成': '',
+        '已拒绝': '',
+        '已取消': ''
+      }
+      return statusMap[status] || ''
+    }
+
     onMounted(() => {
       if (props.task.status_history) {
         props.task.status_history.forEach(history => {
           fetchUserFullName(history.operator)
         })
       }
+      // 加载吨位容积数据
+      loadTonnageVolumeData()
     })
 
     return {
@@ -680,7 +920,10 @@ export default {
       handleResponseSuccess,
       handleSupplierResponseClose,
       userFullNames,
-      normalizeUserId
+      normalizeUserId,
+      tonnageVolumeRange,
+      formattedRequiredWeight,
+      getNextHandlerRole,
     }
   }
 }
@@ -781,8 +1024,6 @@ export default {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #f0f0f0;
 }
 
 .card-content {
@@ -828,5 +1069,47 @@ export default {
   padding: 16px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(24, 144, 255, 0.1);
+}
+
+.timeline-content {
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.timeline-title {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.timeline-info {
+  font-size: 14px;
+  color: #666;
+}
+
+.timeline-info .operator {
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.timeline-info .comment {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #e9f5ff;
+  border-radius: 4px;
+  border-left: 3px solid #409eff;
+}
+
+.timeline-info .next-operator {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #fff7e6;
+  border-radius: 4px;
+  border-left: 3px solid #ffa000;
+  font-weight: 500;
+  color: #d2691e;
 }
 </style>

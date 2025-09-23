@@ -2,13 +2,15 @@
 
 ## 1. RESTful API接口体系概述
 
-智能运力系统采用RESTful API设计风格，提供了完整的派车任务管理、审核流程、状态管理、公司管理和车辆管理等功能接口。系统支持双轨派车流程（轨道A和轨道B），并实现了基于角色的访问控制机制。
+智能运力系统采用RESTful API设计风格，基于Flask框架实现，提供了完整的派车任务管理、审核流程、状态管理、派车单位管理和车辆管理等功能接口。系统支持双轨派车流程（轨道A和轨道B），并实现了基于角色的访问控制机制。
+
+API接口采用统一的响应格式，支持分页查询、条件过滤和权限验证，确保系统安全性和可用性。
 
 ## 2. 双轨派车流程
 
 ### 2.1 轨道A流程（需要审核）
 1. **任务创建**：车间地调或区域调度员创建任务
-2. **待调度员审核**：任务进入审核状态
+2. **待审核**：任务进入审核状态
 3. **审核通过**：区域调度员审核通过后，任务进入待供应商响应状态
 4. **供应商响应**：供应商确认并填写车辆信息
 5. **任务完成**：任务执行完成
@@ -22,19 +24,20 @@
 ## 3. 状态流转
 
 ### 3.1 任务状态列表
-- `待调度员审核`: 任务创建后需要区域调度员审核
-- `待供应商响应`: 任务审核通过后等待供应商确认
-- `供应商已响应`: 供应商确认响应并填写车辆信息
+- `待审核`: 任务创建后需要审核
+- `审核通过`: 任务审核通过
+- `待供应商响应`: 任务等待供应商确认
+- `供应商已响应`: 供应商确认响应
 - `任务完成`: 任务执行完成
 - `审核拒绝`: 任务审核未通过
 
 ### 3.2 状态流转规则
-- 车间地调创建的任务只能进入轨道A，初始状态为`待调度员审核`
+- 车间地调创建的任务初始状态为`待审核`
 - 区域调度员创建的任务可选择轨道A或轨道B：
-  - 轨道A：初始状态为`待调度员审核`
+  - 轨道A：初始状态为`待审核`
   - 轨道B：初始状态为`待供应商响应`
 - 超级管理员创建的任务可选择轨道A或轨道B：
-  - 轨道A：初始状态为`待调度员审核`
+  - 轨道A：初始状态为`待审核`
   - 轨道B：初始状态为`待供应商响应`
 
 ## 4. API接口详细设计
@@ -43,159 +46,534 @@
 
 #### 创建派车任务
 - **HTTP方法**: POST
-- **路径**: `/api/dispatch/tasks`
-- **权限**: `车间地调`, `区域调度员`, `超级管理员`
+- **路径**: `/api/v1/dispatch/tasks`
+- **权限**: `dispatch:write`
 - **请求参数**: JSON格式
   ```json
   {
-    "required_time": "2025-08-20T10:00:00",
-    "start_location": "站点A",
-    "end_location": "站点B",
-    "carrier_company": "运输公司A",
+    "required_date": "2023-08-20",
+    "origin_bureau": "始发局A",
+    "mail_route_name": "邮路名称",
+    "organizing_unit": "组开单位",
+    "organizing_unit_id": 1,
     "transport_type": "公路运输",
     "requirement_type": "普通货物",
-    "volume": 10.5,
-    "weight": 5.0,
+    "required_volume": 100,
+    "required_weight": "5.0",
     "special_requirements": "轻拿轻放",
-    "assigned_supplier_id": "1",
-    "dispatch_track": "轨道A"
+    "assigned_supplier_id": 1,
+    "dispatch_track": "A",
+    "audit_required": true,
+    "business_type": "委办派车"
   }
   ```
 - **响应示例**: 
   ```json
   {
-    "success": true,
+    "code": 200,
+    "message": "创建成功",
     "data": {
-      "task_id": "T202508201000001",
-      "status": "待调度员审核",
-      "dispatch_track": "轨道A",
+      "task_id": "T202308201000001",
+      "status": "待审核",
+      "dispatch_track": "A",
       "current_handler_role": "区域调度员"
     }
   }
   ```
 - **业务逻辑**: 根据用户角色和选择的轨道确定任务初始状态和处理流程
-  - 车间地调: 强制使用轨道A，初始状态为待调度员审核
-  - 区域调度员: 可选择轨道A或B，轨道A初始状态为待调度员审核，轨道B初始状态为待供应商响应
-  - 超级管理员: 可选择轨道A或B，轨道A初始状态为待调度员审核，轨道B初始状态为待供应商响应
 
 #### 获取任务列表
 - **HTTP方法**: GET
-- **路径**: `/api/dispatch/tasks`
-- **权限**: `车间地调`, `区域调度员`, `超级管理员`, `供应商`
+- **路径**: `/api/v1/dispatch/tasks`
+- **权限**: `dispatch:read`
 - **查询参数**: 
   - `page`: 页码，默认1
-  - `limit`: 每页数量，默认20
+  - `per_page`: 每页数量，默认10
+  - `query`: 搜索关键词
 - **响应示例**: 
   ```json
   {
-    "success": true,
+    "code": 200,
+    "message": "获取成功",
     "data": {
-      "list": [
+      "items": [
         {
-          "task_id": "T202508201000001",
-          "required_date": "2025-08-20T10:00:00",
-          "start_bureau": "站点A",
-          "route_name": "站点B",
-          "carrier_company": "运输公司A",
+          "task_id": "T202308201000001",
+          "required_date": "2023-08-20",
+          "origin_bureau": "始发局A",
+          "mail_route_name": "邮路名称",
+          "organizing_unit": "组开单位",
           "transport_type": "公路运输",
           "requirement_type": "普通货物",
-          "volume": 10.5,
-          "weight": 5.0,
-          "status": "待调度员审核",
-          "created_at": "2025-08-19T15:30:00",
-          "updated_at": "2025-08-19T15:30:00",
-          "special_requirements": "轻拿轻放"
+          "required_volume": 100,
+          "required_weight": "5.0",
+          "status": "待审核",
+          "created_at": "2023-08-19 15:30:00",
+          "updated_at": "2023-08-19 15:30:00",
+          "special_requirements": "轻拿轻放",
+          "business_type": "委办派车"
         }
       ],
       "total": 1,
       "page": 1,
-      "limit": 20
+      "per_page": 10
     }
   }
   ```
-- **业务逻辑**: 根据用户角色返回不同范围的任务列表
-  - 超级管理员/区域调度员: 可以看到所有任务
-  - 供应商: 只能看到分配给自己的任务或与自己公司相关的任务
-  - 车间地调: 可以看到所有状态为'供应商已响应'的任务
 
 #### 获取任务详情
 - **HTTP方法**: GET
-- **路径**: `/api/dispatch/tasks/{task_id}`
-- **权限**: `车间地调`, `区域调度员`, `超级管理员`, `供应商`
+- **路径**: `/api/v1/dispatch/tasks/{task_id}`
+- **权限**: `dispatch:read`
 - **响应示例**: 
   ```json
   {
-    "success": true,
+    "code": 200,
+    "message": "获取成功",
     "data": {
-      "task_id": "T202508201000001",
-      "required_date": "2025-08-20T10:00:00",
-      "start_bureau": "站点A",
-      "route_name": "站点B",
-      "carrier_company": "运输公司A",
+      "task_id": "T202308201000001",
+      "required_date": "2023-08-20",
+      "origin_bureau": "始发局A",
+      "mail_route_name": "邮路名称",
+      "organizing_unit": "组开单位",
       "transport_type": "公路运输",
       "requirement_type": "普通货物",
-      "volume": 10.5,
-      "weight": 5.0,
-      "status": "待调度员审核",
-      "created_at": "2025-08-19T15:30:00",
-      "updated_at": "2025-08-19T15:30:00",
+      "required_volume": 100,
+      "required_weight": "5.0",
+      "status": "待审核",
+      "created_at": "2023-08-19 15:30:00",
+      "updated_at": "2023-08-19 15:30:00",
       "special_requirements": "轻拿轻放",
-      "history": [
-        {
-          "status": "待调度员审核",
-          "timestamp": "2025-08-19T15:30:00",
-          "updated_by": "用户张三",
-          "notes": "任务创建"
-        }
-      ]
+      "business_type": "委办派车",
+      "vehicles": []
     }
   }
   ```
-- **业务逻辑**: 获取任务的详细信息，包括状态历史记录
 
 #### 更新任务信息
 - **HTTP方法**: PUT
-- **路径**: `/api/dispatch/tasks/{task_id}`
-- **权限**: `车间地调`, `区域调度员`, `超级管理员`
+- **路径**: `/api/v1/dispatch/tasks/{task_id}`
+- **权限**: `dispatch:write`
 - **请求参数**: JSON格式
   ```json
   {
-    "title": "紧急运输任务",
-    "vehicle_type": "货车",
-    "purpose": "原材料运输",
-    "start_location": "站点A",
-    "end_location": "站点B",
-    "expected_start_time": "2025-08-20T10:00:00",
-    "expected_end_time": "2025-08-20T16:00:00",
-    "passenger_count": 0,
-    "cargo_weight": 5.0,
-    "cargo_volume": 10.5,
-    "special_requirements": "轻拿轻放"
+    "required_date": "2023-08-21",
+    "origin_bureau": "始发局B",
+    "mail_route_name": "邮路名称更新",
+    "organizing_unit": "组开单位",
+    "organizing_unit_id": 1,
+    "transport_type": "公路运输",
+    "requirement_type": "普通货物",
+    "required_volume": 120,
+    "required_weight": "6.0",
+    "special_requirements": "轻拿轻放，小心易碎"
   }
   ```
 - **响应示例**: 
   ```json
   {
-    "success": true,
+    "code": 200,
+    "message": "更新成功",
     "data": {
-      "message": "任务更新成功"
+      "task_id": "T202308201000001"
     }
   }
   ```
-- **业务逻辑**: 更新任务的基本信息，不包括状态变更
 
 ### 4.2 审核流程接口
 
-#### 提交审核
+#### 审核任务
 - **HTTP方法**: POST
-- **路径**: `/api/dispatch/tasks/{task_id}/submit-audit`
-- **权限**: `车间地调`, `区域调度员`, `超级管理员`
+- **路径**: `/api/v1/dispatch/tasks/{task_id}/approve`
+- **权限**: `dispatch:approve`
 - **请求参数**: JSON格式
   ```json
   {
-    "notes": "请尽快审核此任务"
+    "action": "approve",
+    "note": "审核通过"
   }
   ```
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "审核成功",
+    "data": {
+      "task_id": "T202308201000001",
+      "status": "审核通过"
+    }
+  }
+  ```
+- **业务逻辑**: 
+  - `action`可选值: `approve`(通过), `reject`(拒绝)
+  - 审核通过后，任务状态变为"审核通过"，然后自动进入"待供应商响应"状态
+  - 审核拒绝后，任务状态变为"审核拒绝"
+
+#### 获取任务状态历史
+- **HTTP方法**: GET
+- **路径**: `/api/v1/dispatch/tasks/{task_id}/status-history`
+- **权限**: `dispatch:read`
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "获取成功",
+    "data": [
+      {
+        "id": 1,
+        "task_id": "T202308201000001",
+        "status_change": "待审核",
+        "operator": "张三",
+        "timestamp": "2023-08-19 15:30:00",
+        "note": "任务创建"
+      },
+      {
+        "id": 2,
+        "task_id": "T202308201000001",
+        "status_change": "审核通过",
+        "operator": "李四",
+        "timestamp": "2023-08-19 16:30:00",
+        "note": "审核通过"
+      }
+    ]
+  }
+  ```
+
+### 4.3 供应商响应接口
+
+#### 分配车辆
+- **HTTP方法**: POST
+- **路径**: `/api/v1/dispatch/tasks/{task_id}/assign`
+- **权限**: `dispatch:assign`
+- **请求参数**: JSON格式
+  ```json
+  {
+    "vehicles": [
+      {
+        "license_plate": "京A12345",
+        "carriage_number": "C12345",
+        "vehicle_type": "40吨A",
+        "actual_volume": 100,
+        "notes": "车辆备注"
+      }
+    ]
+  }
+  ```
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "分配成功",
+    "data": {
+      "task_id": "T202308201000001",
+      "status": "供应商已响应"
+    }
+  }
+  ```
+- **业务逻辑**: 供应商为任务分配车辆，任务状态变为"供应商已响应"
+
+#### 完成任务
+- **HTTP方法**: POST
+- **路径**: `/api/v1/dispatch/tasks/{task_id}/complete`
+- **权限**: `dispatch:complete`
+- **请求参数**: JSON格式
+  ```json
+  {
+    "note": "任务已完成"
+  }
+  ```
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "任务完成",
+    "data": {
+      "task_id": "T202308201000001",
+      "status": "任务完成"
+    }
+  }
+  ```
+- **业务逻辑**: 将任务标记为完成状态
+
+### 4.4 车辆管理接口
+
+#### 获取车辆列表
+- **HTTP方法**: GET
+- **路径**: `/api/v1/vehicles`
+- **权限**: `vehicle:read`
+- **查询参数**: 
+  - `page`: 页码，默认1
+  - `per_page`: 每页数量，默认10
+  - `query`: 搜索关键词
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "获取成功",
+    "data": {
+      "items": [
+        {
+          "id": 1,
+          "task_id": "T202308201000001",
+          "license_plate": "京A12345",
+          "carriage_number": "C12345",
+          "vehicle_type": "40吨A",
+          "actual_volume": 100,
+          "status": "待确认",
+          "created_at": "2023-08-19 17:30:00"
+        }
+      ],
+      "total": 1,
+      "page": 1,
+      "per_page": 10
+    }
+  }
+  ```
+
+#### 更新车辆容积
+- **HTTP方法**: POST
+- **路径**: `/api/v1/vehicles/update-volume`
+- **权限**: `vehicle:write`
+- **请求参数**: JSON格式
+  ```json
+  {
+    "vehicle_id": 1,
+    "new_volume": 120,
+    "reason": "容积调整",
+    "volume_photo_url": "http://example.com/photo.jpg"
+  }
+  ```
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "更新成功",
+    "data": {
+      "vehicle_id": 1,
+      "actual_volume": 120
+    }
+  }
+  ```
+
+#### 合并车辆
+- **HTTP方法**: POST
+- **路径**: `/api/v1/dispatch/vehicles/merge`
+- **权限**: `vehicle:merge`
+- **请求参数**: JSON格式
+  ```json
+  {
+    "source_vehicle_id": 1,
+    "target_vehicle_id": 2,
+    "merge_reason": "优化装载"
+  }
+  ```
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "合并成功",
+    "data": {
+      "target_vehicle_id": 2,
+      "merged_volume": 220
+    }
+  }
+  ```
+- **业务逻辑**: 将源车辆的容积合并到目标车辆，源车辆标记为已合并状态
+
+#### 降档车辆
+- **HTTP方法**: POST
+- **路径**: `/api/v1/dispatch/vehicles/{vehicle_id}/downgrade`
+- **权限**: `vehicle:downgrade`
+- **请求参数**: JSON格式
+  ```json
+  {
+    "downgraded_type": "30吨",
+    "downgraded_volume": 80,
+    "downgrade_reason": "车辆实际容量不足"
+  }
+  ```
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "降档成功",
+    "data": {
+      "vehicle_id": 1,
+      "original_type": "40吨A",
+      "downgraded_type": "30吨",
+      "downgraded_volume": 80
+    }
+  }
+  ```
+- **业务逻辑**: 将车辆降级为较低容量的车型，记录降档历史
+
+### 4.5 派车单位管理接口
+
+#### 获取派车单位列表
+- **HTTP方法**: GET
+- **路径**: `/api/v1/dispatch-units`
+- **权限**: `dispatch_unit:read`
+- **查询参数**: 
+  - `page`: 页码，默认1
+  - `per_page`: 每页数量，默认10
+  - `query`: 搜索关键词
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "获取成功",
+    "data": {
+      "items": [
+        {
+          "id": 1,
+          "name": "派车单位A",
+          "unit_type": "供应商",
+          "contact_person": "张三",
+          "contact_phone": "13800138000",
+          "is_active": true
+        }
+      ],
+      "total": 1,
+      "page": 1,
+      "per_page": 10
+    }
+  }
+  ```
+
+#### 创建派车单位
+- **HTTP方法**: POST
+- **路径**: `/api/v1/dispatch-units`
+- **权限**: `dispatch_unit:write`
+- **请求参数**: JSON格式
+  ```json
+  {
+    "name": "派车单位B",
+    "unit_type": "供应商",
+    "bank_name": "中国银行",
+    "account_number": "6225123456789012",
+    "address": "北京市海淀区",
+    "contact_person": "李四",
+    "contact_phone": "13900139000",
+    "email": "lisi@example.com"
+  }
+  ```
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "创建成功",
+    "data": {
+      "id": 2,
+      "name": "派车单位B"
+    }
+  }
+  ```
+
+### 4.6 用户管理接口
+
+#### 获取用户列表
+- **HTTP方法**: GET
+- **路径**: `/api/v1/users`
+- **权限**: `user:read`
+- **查询参数**: 
+  - `page`: 页码，默认1
+  - `per_page`: 每页数量，默认10
+  - `query`: 搜索关键词
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "获取成功",
+    "data": {
+      "items": [
+        {
+          "id": 1,
+          "username": "admin",
+          "full_name": "系统管理员",
+          "email": "admin@example.com",
+          "phone": "13800138000",
+          "dispatch_unit_id": null,
+          "is_active": true,
+          "roles": ["超级管理员"]
+        }
+      ],
+      "total": 1,
+      "page": 1,
+      "per_page": 10
+    }
+  }
+  ```
+
+#### 创建用户
+- **HTTP方法**: POST
+- **路径**: `/api/v1/users`
+- **权限**: `user:write`
+- **请求参数**: JSON格式
+  ```json
+  {
+    "username": "supplier1",
+    "password": "password123",
+    "full_name": "供应商用户",
+    "email": "supplier@example.com",
+    "phone": "13900139000",
+    "dispatch_unit_id": 1
+  }
+  ```
+- **响应示例**: 
+  ```json
+  {
+    "code": 200,
+    "message": "创建成功",
+    "data": {
+      "id": 2,
+      "username": "supplier1"
+    }
+  }
+  ```
+
+## 5. API实现状态
+
+| 接口分类 | 接口名称 | 实现状态 | 备注 |
+|---------|---------|---------|------|
+| 任务管理 | 创建派车任务 | ✅ 已实现 | |
+| 任务管理 | 获取任务列表 | ✅ 已实现 | |
+| 任务管理 | 获取任务详情 | ✅ 已实现 | |
+| 任务管理 | 更新任务信息 | ✅ 已实现 | |
+| 审核流程 | 审核任务 | ✅ 已实现 | |
+| 审核流程 | 获取任务状态历史 | ✅ 已实现 | |
+| 供应商响应 | 分配车辆 | ✅ 已实现 | |
+| 供应商响应 | 完成任务 | ✅ 已实现 | |
+| 车辆管理 | 获取车辆列表 | ✅ 已实现 | |
+| 车辆管理 | 更新车辆容积 | ✅ 已实现 | |
+| 车辆管理 | 合并车辆 | ✅ 已实现 | |
+| 车辆管理 | 降档车辆 | ✅ 已实现 | |
+| 派车单位管理 | 获取派车单位列表 | ✅ 已实现 | |
+| 派车单位管理 | 创建派车单位 | ✅ 已实现 | |
+| 用户管理 | 获取用户列表 | ✅ 已实现 | |
+| 用户管理 | 创建用户 | ✅ 已实现 | |
+
+## 6. 错误处理
+
+### 6.1 错误响应格式
+
+```json
+{
+  "code": 400,
+  "message": "错误信息",
+  "data": null
+}
+```
+
+### 6.2 常见错误码
+
+| 错误码 | 说明 |
+|-------|------|
+| 400 | 请求参数错误 |
+| 401 | 未授权 |
+| 403 | 权限不足 |
+| 404 | 资源不存在 |
+| 409 | 资源冲突 |
+| 500 | 服务器内部错误 |
 - **响应示例**: 
   ```json
   {

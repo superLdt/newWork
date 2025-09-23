@@ -147,15 +147,18 @@ class DispatchController:
                 requirement_type:
                   type: string
                   description: 需求类型
-                standard_weight:
+                required_weight:
                   type: string
-                  description: 标准吨位
-                standard_volume:
+                  description: 需求吨位
+                required_volume:
                   type: integer
-                  description: 标准容积
+                  description: 需求容积
+                actual_weight:
+                  type: string
+                  description: 实际吨位
                 actual_volume:
                   type: integer
-                  description: 实际需求容积
+                  description: 实际容积
                 special_requirements:
                   type: string
                   description: 特殊要求
@@ -234,15 +237,18 @@ class DispatchController:
                 requirement_type:
                   type: string
                   description: 需求类型
-                standard_weight:
+                required_weight:
                   type: string
-                  description: 标准吨位
-                standard_volume:
+                  description: 需求吨位
+                required_volume:
                   type: integer
-                  description: 标准容积
+                  description: 需求容积
+                actual_weight:
+                  type: string
+                  description: 实际吨位
                 actual_volume:
                   type: integer
-                  description: 实际需求容积
+                  description: 实际容积
                 special_requirements:
                   type: string
                   description: 特殊要求
@@ -627,7 +633,7 @@ class DispatchController:
     @permission_required('outsourcing:assign')
     def submit_outsourcing_response():
         """
-        提交外包管理公司响应
+        提交大容积供应商响应
         ---
         tags:
           - 派车管理
@@ -965,111 +971,78 @@ class DispatchController:
             return error_response(str(e), 500)
     
     @staticmethod
-    @permission_required('vehicle:merge')
-    def merge_vehicles():
+    def process_workshop_verification(task_id):
         """
-        合并车辆
-        ---
-        tags:
-          - 车辆管理
-        parameters:
-          - name: body
-            in: body
-            required: true
-            schema:
-              type: object
-              properties:
-                source_vehicle_id:
-                  type: integer
-                  description: 源车辆ID
-                target_vehicle_id:
-                  type: integer
-                  description: 目标车辆ID
-                reason:
-                  type: string
-                  description: 合并原因
-        responses:
-          200:
-            description: 成功合并车辆
-          400:
-            description: 参数错误
-          404:
-            description: 车辆不存在
-          500:
-            description: 服务器错误
+        处理车间地调核实操作
         """
         try:
-            # 获取请求数据
             data = request.get_json()
             
-            # 验证请求数据
-            if not data:
-                return error_response("请求数据不能为空", 400)
+            # 验证必需字段
+            if not data or 'operation_type' not in data:
+                return jsonify({
+                    'success': False,
+                    'message': '缺少必需的参数：operation_type',
+                    'code': 'MISSING_REQUIRED_FIELDS'
+                }), 400
             
-            if 'source_vehicle_id' not in data or 'target_vehicle_id' not in data:
-                return error_response("缺少源车辆ID或目标车辆ID参数", 400)
+            operation_type = data.get('operation_type')
             
-            # 调用业务层处理车辆合并
-            result = DispatchBusiness.process_vehicle_merge(data)
+            # 验证操作类型
+            valid_operations = ['downgrade', 'merge', 'confirm']
+            if operation_type not in valid_operations:
+                return jsonify({
+                    'success': False,
+                    'message': f'无效的操作类型：{operation_type}',
+                    'code': 'INVALID_OPERATION_TYPE'
+                }), 400
             
-            # 返回成功响应
-            return success_response(result)
+            # 根据操作类型验证必需字段
+            if operation_type == 'downgrade':
+                if 'tonnage' not in data:
+                    return jsonify({
+                        'success': False,
+                        'message': '降档操作缺少必需的参数：tonnage',
+                        'code': 'MISSING_TONNAGE'
+                    }), 400
+                    
+                tonnage = data.get('tonnage')
+                if not isinstance(tonnage, (int, float)) or tonnage <= 0:
+                    return jsonify({
+                        'success': False,
+                        'message': '吨位必须是大于0的数字',
+                        'code': 'INVALID_TONNAGE'
+                    }), 400
+            
+            elif operation_type == 'merge':
+                if 'merge_task_id' not in data:
+                    return jsonify({
+                        'success': False,
+                        'message': '合并操作缺少必需的参数：merge_task_id',
+                        'code': 'MISSING_MERGE_TASK_ID'
+                    }), 400
+            
+            # 调用业务层处理车间地调核实操作
+            business = DispatchBusiness()
+            result = business.process_workshop_verification(task_id, data)
+            
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'data': result['data'],
+                    'message': '车间地调核实操作成功'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': result['message'],
+                    'code': result.get('code', 'WORKSHOP_VERIFICATION_FAILED')
+                }), 400
+                
         except Exception as e:
-            logger.error(f"合并车辆失败: {str(e)}")
-            return error_response(str(e), 500)
-    
-    @staticmethod
-    @permission_required('vehicle:downgrade')
-    def downgrade_vehicle(vehicle_id: int):
-        """
-        降档车辆
-        ---
-        tags:
-          - 车辆管理
-        parameters:
-          - name: vehicle_id
-            in: path
-            type: integer
-            required: true
-            description: 车辆ID
-          - name: body
-            in: body
-            required: true
-            schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  description: 降档原因
-                new_vehicle_type:
-                  type: string
-                  description: 新车辆类型
-        responses:
-          200:
-            description: 成功降档车辆
-          400:
-            description: 参数错误
-          404:
-            description: 车辆不存在
-          500:
-            description: 服务器错误
-        """
-        try:
-            # 获取请求数据
-            data = request.get_json()
-            
-            # 验证请求数据
-            if not data:
-                return error_response("请求数据不能为空", 400)
-            
-            if 'new_vehicle_type' not in data:
-                return error_response("缺少新车辆类型参数", 400)
-            
-            # 调用业务层处理车辆降档
-            result = DispatchBusiness.process_vehicle_downgrade(vehicle_id, data)
-            
-            # 返回成功响应
-            return success_response(result)
-        except Exception as e:
-            logger.error(f"降档车辆失败: {str(e)}")
-            return error_response(str(e), 500)
+            logger.error(f"车间地调核实操作失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': '车间地调核实操作失败',
+                'code': 'WORKSHOP_VERIFICATION_ERROR'
+            }), 500

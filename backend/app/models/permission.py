@@ -87,6 +87,12 @@ class Permission(db.Model):
             {'name': '查看客户', 'code': 'customer:read', 'description': '查看客户列表和详情', 'resource_type': 'api', 'resource_id': '/customers', 'action': 'read'},
             {'name': '管理客户', 'code': 'customer:manage', 'description': '创建、编辑、删除客户', 'resource_type': 'api', 'resource_id': '/customers', 'action': 'write'},
             
+            # 吨位容积映射权限
+            {'name': '查看吨位容积映射', 'code': 'tonnage_volume:read', 'description': '查看吨位容积映射列表和详情', 'resource_type': 'api', 'resource_id': '/tonnage-volume', 'action': 'read'},
+            {'name': '创建吨位容积映射', 'code': 'tonnage_volume:create', 'description': '创建吨位容积映射', 'resource_type': 'api', 'resource_id': '/tonnage-volume', 'action': 'write'},
+            {'name': '更新吨位容积映射', 'code': 'tonnage_volume:update', 'description': '更新吨位容积映射', 'resource_type': 'api', 'resource_id': '/tonnage-volume', 'action': 'write'},
+            {'name': '删除吨位容积映射', 'code': 'tonnage_volume:delete', 'description': '删除吨位容积映射', 'resource_type': 'api', 'resource_id': '/tonnage-volume', 'action': 'write'},
+            
             # 调度管理权限
             {'name': '查看订单', 'code': 'order:read', 'description': '查看运输订单', 'resource_type': 'api', 'resource_id': '/orders', 'action': 'read'},
             {'name': '创建调度', 'code': 'dispatch:create', 'description': '创建调度任务', 'resource_type': 'api', 'resource_id': '/dispatch', 'action': 'write'},
@@ -100,7 +106,9 @@ class Permission(db.Model):
             # 供应商响应权限
             {'name': '供应商响应', 'code': 'supplier:respond', 'description': '供应商响应调度任务', 'resource_type': 'api', 'resource_id': '/dispatch/supplier-response', 'action': 'write'},
             {'name': '班组派车', 'code': 'team:assign', 'description': '班组长派车响应', 'resource_type': 'api', 'resource_id': '/dispatch/team-response', 'action': 'write'},
-            {'name': '外包派车', 'code': 'outsourcing:assign', 'description': '外包管理公司派车响应', 'resource_type': 'api', 'resource_id': '/dispatch/outsourcing-response', 'action': 'write'}
+            {'name': '大容积供应商派车', 'code': 'large_capacity_supplier:assign', 'description': '大容积供应商派车响应', 'resource_type': 'api', 'resource_id': '/dispatch/large-capacity-supplier-response', 'action': 'write'},
+        # 为了向后兼容，保留原有权限
+        {'name': '外包派车', 'code': 'outsourcing:assign', 'description': '外包管理公司派车响应（已废弃）', 'resource_type': 'api', 'resource_id': '/dispatch/outsourcing-response', 'action': 'write'},
         ]
     
     @staticmethod

@@ -24,6 +24,9 @@ vehicle_capacity_reference_bp.route('/<int:vehicle_id>', methods=['DELETE'])(Veh
 # 获取可用车辆列表路由
 vehicle_capacity_reference_bp.route('/available', methods=['GET'])(VehicleCapacityReferenceController.get_available_vehicles)
 
+# 获取可用车厢列表路由
+vehicle_capacity_reference_bp.route('/available-carriages', methods=['GET'])(VehicleCapacityReferenceController.get_available_carriages)
+
 # 搜索车辆路由
 vehicle_capacity_reference_bp.route('/search', methods=['GET'])(VehicleCapacityReferenceController.search_vehicles)
 

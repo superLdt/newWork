@@ -366,11 +366,11 @@ export default {
       return permissionStore.hasPermission(permission)
     }
 
-    // 检查是否可以创建任务（只有超级管理员和区域调度员可以）
+    // 检查是否可以创建任务（超级管理员、区域调度员和车间地调都可以）
     const canCreateTask = computed(() => {
       const rolesArr = Array.isArray(permissionStore.roles) ? permissionStore.roles : []
       const hasRole = (names) => rolesArr.some(r => names.includes(r))
-      return hasRole(['超级管理员', '区域调度员'])
+      return hasRole(['超级管理员', '区域调度员', '车间地调'])
     })
 
     // 基于当前用户角色返回响应按钮文本
@@ -380,7 +380,7 @@ export default {
         const hasRole = (names) => rolesArr.some(r => names.includes(r))
 
         if (hasRole(['班组长', 'team_leader'])) return '自备派车'
-        if (hasRole(['外包管理公司', 'outsourcing_manager'])) return '大容积派车'
+        if (hasRole(['大容积供应商', 'large_capacity_supplier'])) return '大容积派车'
         if (hasRole(['供应商', 'supplier'])) return '供应商响应'
 
         // 兜底：按业务类型
@@ -398,7 +398,7 @@ export default {
         const hasRole = (names) => rolesArr.some(r => names.includes(r))
 
         if (hasRole(['班组长', 'team_leader'])) return '自备派车'
-        if (hasRole(['外包管理公司', 'outsourcing_manager'])) return '大容积派车'
+        if (hasRole(['大容积供应商', 'large_capacity_supplier'])) return '大容积派车'
         if (hasRole(['供应商', 'supplier'])) return '供应商响应'
 
         // 兜底：结合业务类型
@@ -421,7 +421,7 @@ export default {
         if (!allowedStatuses.includes(taskRow?.status)) return false
 
         if (hasRole(['班组长', 'team_leader'])) return true
-        if (hasRole(['外包管理公司', 'outsourcing_manager'])) return true
+        if (hasRole(['大容积供应商', 'large_capacity_supplier'])) return true
         if (hasRole(['供应商', 'supplier'])) return true
         return false
       } catch (e) {

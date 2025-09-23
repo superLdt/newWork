@@ -5,16 +5,19 @@
         <el-input v-model="assignForm.task_id" disabled></el-input>
       </el-form-item>
       
-      <el-form-item label="标准吨位">
-        <el-input v-model="taskInfo.standard_weight" disabled>
+      <el-form-item label="需求吨位">
+        <el-input v-model="formattedRequiredWeight" disabled>
           <template #append>吨</template>
         </el-input>
       </el-form-item>
       
       <el-form-item label="实际需求容积">
-        <el-input v-model="taskInfo.actual_volume" disabled>
+        <el-input v-model="taskInfo.required_volume" disabled>
           <template #append>m³</template>
         </el-input>
+        <div v-if="tonnageVolumeRange" class="volume-range-info">
+          容积区间: {{ tonnageVolumeRange }}
+        </div>
       </el-form-item>
       
       <el-divider content-position="left">选择车辆</el-divider>
@@ -45,7 +48,7 @@
           height="300px"
           border
         >
-          <el-table-column type="selection" width="55"></el-table-column>
+          <el-table-column type="selection" width="55" :selectable="checkSelectable"></el-table-column>
           <el-table-column prop="plate_number" label="车牌号" width="120"></el-table-column>
           <el-table-column prop="vehicle_type" label="车型" width="100"></el-table-column>
           <el-table-column prop="capacity" label="载重量" width="100">
@@ -69,32 +72,16 @@
         </el-table>
       </el-form-item>
       
-      <el-form-item label="已选车辆">
-        <el-table
-          :data="assignForm.selectedVehicles"
-          style="width: 100%"
-          border
-        >
-          <el-table-column prop="plate_number" label="车牌号" width="120"></el-table-column>
-          <el-table-column prop="vehicle_type" label="车型" width="100"></el-table-column>
-          <el-table-column prop="capacity" label="载重量" width="100">
-            <template #default="scope">
-              {{ scope.row.capacity }} 吨
-            </template>
-          </el-table-column>
-          <el-table-column prop="volume" label="容积" width="100">
-            <template #default="scope">
-              {{ scope.row.volume }} m³
-            </template>
-          </el-table-column>
-          <el-table-column prop="driver_name" label="司机姓名" width="120"></el-table-column>
-          <el-table-column prop="driver_phone" label="司机电话" width="150"></el-table-column>
-          <el-table-column label="操作" width="100">
-            <template #default="scope">
-              <el-button type="danger" size="small" @click="removeVehicle(scope.$index)">移除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+      <!-- 显示已选车辆信息 -->
+      <el-form-item label="已选车辆" v-if="assignForm.selectedVehicles.length > 0">
+        <el-card class="selected-vehicle-card">
+          <div class="vehicle-info">
+            <span class="license-plate">{{ assignForm.selectedVehicles[0].plate_number }}</span>
+            <span class="vehicle-type">{{ assignForm.selectedVehicles[0].vehicle_type }}</span>
+            <span class="volume-info">{{ assignForm.selectedVehicles[0].volume }}m³</span>
+            <el-button type="danger" size="small" @click="removeVehicle(0)">移除</el-button>
+          </div>
+        </el-card>
       </el-form-item>
       
       <el-form-item label="分配说明" prop="notes">
@@ -111,7 +98,8 @@
 
 <script>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import tonnageVolumeService from '@/services/tonnageVolumeService'
 
 export default {
   name: 'AssignVehicle',
@@ -128,6 +116,42 @@ export default {
   emits: ['assign-success', 'cancel'],
   setup(props, { emit }) {
     const assignFormRef = ref(null)
+    const tonnageVolumeData = ref(null) // 吨位容积数据
+    
+    // 格式化需求吨位显示
+    const formattedRequiredWeight = computed(() => {
+      if (!props.taskInfo.required_weight) return ''
+      // 移除重复的"吨"字，如"40吨A吨"改为"40吨A"，"8吨吨"改为"8吨"
+      return props.taskInfo.required_weight.replace(/吨.*吨$/, '吨')
+    })
+    
+    // 获取吨位对应的容积区间
+    const tonnageVolumeRange = computed(() => {
+      if (!tonnageVolumeData.value || !props.taskInfo.required_weight) return ''
+      
+      const data = tonnageVolumeData.value
+      if (data.min_volume !== undefined && data.max_volume !== undefined) {
+        if (data.max_volume === null) {
+          return `${data.min_volume}m³以上`
+        }
+        return `${data.min_volume}-${data.max_volume}m³`
+      }
+      return ''
+    })
+    
+    // 加载吨位容积数据
+    const loadTonnageVolumeData = async () => {
+      if (!props.taskInfo.required_weight) return
+      
+      try {
+        const response = await tonnageVolumeService.getVolumeByTonnage(props.taskInfo.required_weight)
+        if (response && response.data) {
+          tonnageVolumeData.value = response.data
+        }
+      } catch (error) {
+        console.error('获取吨位容积数据失败:', error)
+      }
+    }
     
     // 表单数据
     const assignForm = reactive({
@@ -139,7 +163,26 @@ export default {
     // 表单验证规则
     const rules = {
       selectedVehicles: [
-        { type: 'array', required: true, message: '请至少选择一辆车辆', trigger: 'change' }
+        { 
+          type: 'array', 
+          required: true, 
+          message: '请至少选择一辆车辆', 
+          trigger: 'change',
+          validator: (rule, value, callback) => {
+            if (!value || value.length === 0) {
+              callback(new Error('请至少选择一辆车辆'))
+              return
+            }
+            
+            // 唯一性验证：一个任务只能派遣一辆车
+            if (value.length > 1) {
+              callback(new Error('一个任务只能派遣一辆车，请重新选择'))
+              return
+            }
+            
+            callback()
+          }
+        }
       ],
       notes: [
         { max: 200, message: '说明不能超过200个字符', trigger: 'blur' }
@@ -184,6 +227,12 @@ export default {
       })
     })
     
+    // 检查车辆是否可选择（限制只能选择一辆车）
+    const checkSelectable = (row, index) => {
+      // 如果已经选择了一辆车，就不能再选择其他车辆
+      return assignForm.selectedVehicles.length === 0
+    }
+    
     // 获取车辆状态类型
     const getStatusType = (status) => {
       const statusMap = {
@@ -219,7 +268,67 @@ export default {
     
     // 表格选择变化
     const handleSelectionChange = (selection) => {
-      assignForm.selectedVehicles = selection
+      // 确保只选择一辆车
+      if (selection.length > 0) {
+        // 检查容积是否在范围内
+        const selectedVehicle = selection[0]
+        checkVolumeRange(selectedVehicle.volume)
+        assignForm.selectedVehicles = [selectedVehicle]
+      } else {
+        assignForm.selectedVehicles = []
+      }
+    }
+    
+    // 检查容积是否在需求范围内
+    const checkVolumeRange = (volume) => {
+      if (!volume || !props.taskInfo.required_volume || !tonnageVolumeData.value) return
+      
+      const selectedVolume = parseFloat(volume)
+      
+      // 获取吨位对应的容积区间
+      const data = tonnageVolumeData.value
+      const minVolume = data.min_volume !== undefined ? parseFloat(data.min_volume) : null
+      const maxVolume = data.max_volume !== undefined ? parseFloat(data.max_volume) : null
+      
+      console.log('容积检查:', { selectedVolume, minVolume, maxVolume })
+      
+      // 检查是否在吨位对应的容积区间内
+      let inRange = true
+      let rangeDescription = ''
+      
+      if (minVolume !== null && maxVolume !== null) {
+        // 区间范围检查（有最小值和最大值）
+        inRange = selectedVolume >= minVolume && selectedVolume <= maxVolume
+        rangeDescription = `${minVolume}-${maxVolume}m³`
+      } else if (minVolume !== null && maxVolume === null) {
+        // 最小值以上范围检查（只有最小值，无最大值）
+        inRange = selectedVolume >= minVolume
+        rangeDescription = `${minVolume}m³以上`
+      } else if (minVolume === null && maxVolume !== null) {
+        // 最大值以下范围检查（只有最大值，无最小值）
+        inRange = selectedVolume <= maxVolume
+        rangeDescription = `≤${maxVolume}m³`
+      } else {
+        // 无区间限制
+        inRange = true
+        rangeDescription = '无限制'
+      }
+      
+      // 只有当容积超出吨位区间时才提示
+      if (!inRange) {
+        ElMessageBox.confirm(
+          `该车容积(${selectedVolume}m³)不在吨位${props.taskInfo.required_weight}对应的容积区间${rangeDescription}内，是否派车？`,
+          '容积范围提示',
+          {
+            confirmButtonText: '继续派车',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        ).catch(() => {
+          // 用户取消，清空选择
+          assignForm.selectedVehicles = []
+        })
+      }
     }
     
     // 移除已选车辆
@@ -243,13 +352,13 @@ export default {
             const totalCapacity = assignForm.selectedVehicles.reduce((sum, vehicle) => sum + vehicle.capacity, 0)
             const totalVolume = assignForm.selectedVehicles.reduce((sum, vehicle) => sum + vehicle.volume, 0)
             
-            if (totalCapacity < props.taskInfo.standard_weight) {
-              ElMessage.warning(`选择的车辆总载重量(${totalCapacity}吨)小于任务需求(${props.taskInfo.standard_weight}吨)`)
+            if (totalCapacity < props.taskInfo.required_weight) {
+              ElMessage.warning(`选择的车辆总载重量(${totalCapacity}吨)小于任务需求(${props.taskInfo.required_weight}吨)`)
               return
             }
             
-            if (totalVolume < props.taskInfo.actual_volume) {
-              ElMessage.warning(`选择的车辆总容积(${totalVolume}m³)小于任务需求(${props.taskInfo.actual_volume}m³)`)
+            if (totalVolume < props.taskInfo.required_volume) {
+              ElMessage.warning(`选择的车辆总容积(${totalVolume}m³)小于任务需求(${props.taskInfo.required_volume}m³)`)
               return
             }
             
@@ -292,6 +401,8 @@ export default {
     onMounted(() => {
       loadVehicles()
       assignForm.task_id = props.taskId
+      // 加载吨位容积数据
+      loadTonnageVolumeData()
     })
     
     return {
@@ -308,7 +419,10 @@ export default {
       filterVehicles,
       submitForm,
       cancel,
-      taskInfo: props.taskInfo
+      taskInfo: props.taskInfo,
+      checkSelectable,
+      tonnageVolumeRange,
+      formattedRequiredWeight
     }
   }
 }
@@ -321,5 +435,39 @@ export default {
 
 .el-divider {
   margin: 20px 0;
+}
+
+.volume-range-info {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.selected-vehicle-card {
+  width: 100%;
+}
+
+.vehicle-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.license-plate {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.vehicle-type {
+  background-color: #ecf5ff;
+  color: #409eff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.volume-info {
+  color: #606266;
+  font-size: 14px;
 }
 </style>

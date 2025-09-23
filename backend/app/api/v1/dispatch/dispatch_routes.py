@@ -29,6 +29,9 @@ dispatch_bp.route('/tasks/<string:task_id>/assign', methods=['POST'])(DispatchCo
 # 完成派车任务路由
 dispatch_bp.route('/tasks/<string:task_id>/complete', methods=['POST'])(DispatchController.complete_task)
 
+# 车间地调核实操作路由
+dispatch_bp.route('/tasks/<string:task_id>/workshop-verification', methods=['POST'])(DispatchController.process_workshop_verification)
+
 # 获取派车任务状态历史路由
 dispatch_bp.route('/tasks/<string:task_id>/status-history', methods=['GET'])(DispatchController.get_task_status_history)
 
@@ -50,10 +53,10 @@ dispatch_bp.route('/vehicles/<int:vehicle_id>/downgrade-history', methods=['GET'
 # 仪表盘统计概览路由
 dispatch_bp.route('/dashboard/statistics', methods=['GET'])(DashboardController.get_dashboard_statistics)
 
-# 仪表盘分布数据路由
+# 仪表盘分布统计路由
 dispatch_bp.route('/dashboard/distributions', methods=['GET'])(DashboardController.get_dashboard_distributions)
 
-# 紧急任务列表路由
+# 紧急任务路由
 dispatch_bp.route('/dashboard/urgent-tasks', methods=['GET'])(DashboardController.get_urgent_tasks)
 
 # 完整仪表盘数据路由
@@ -62,8 +65,8 @@ dispatch_bp.route('/dashboard/complete', methods=['GET'])(DashboardController.ge
 # 供应商响应路由
 dispatch_bp.route('/tasks/supplier-response', methods=['POST'])(DispatchController.submit_supplier_response)
 
-# 班组派车响应路由
+# 班组响应路由
 dispatch_bp.route('/tasks/team-response', methods=['POST'])(DispatchController.submit_team_response)
 
-# 外包管理公司响应路由
+# 外包响应路由
 dispatch_bp.route('/tasks/outsourcing-response', methods=['POST'])(DispatchController.submit_outsourcing_response)

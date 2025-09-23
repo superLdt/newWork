@@ -5,8 +5,8 @@
 """
 
 from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
 
 # 数据库ORM
 db = SQLAlchemy()
@@ -36,3 +36,22 @@ def init_extensions(app):
     # mail.init_app(app)
     
     return app
+
+# 新增：为 get_current_user 提供用户查找回调
+@jwt.user_lookup_loader
+def load_user_from_jwt(_jwt_header, jwt_data):
+    """根据 JWT 中的身份标识加载用户，用于 flask_jwt_extended.get_current_user()。"""
+    try:
+        identity = jwt_data.get("sub")
+        if identity is None:
+            return None
+        # 延迟导入以避免循环依赖
+        from app.models.user import User
+        # 身份在登录时以 str(user.id) 存储，这里兼容转换
+        try:
+            identity = int(identity)
+        except Exception:
+            pass
+        return User.query.get(identity)
+    except Exception:
+        return None

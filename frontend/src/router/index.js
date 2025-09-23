@@ -58,6 +58,16 @@ const routes = [
           permissions: ['dispatch_unit:read']
         }
       },
+      {
+        path: '/basic-data/tonnage-volume-mapping',
+        name: 'TonnageVolumeMapping',
+        component: () => import('../pages/basic-data/TonnageVolumeMapping.vue'),
+        meta: {
+          title: '吨位容积对应管理',
+          menuCode: 'tonnage_volume_mapping',
+          permissions: ['tonnage_volume:read']
+        }
+      },
       // 调度管理路由
       {
         path: '/dispatch/orders',

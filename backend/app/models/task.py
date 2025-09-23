@@ -17,9 +17,10 @@ class ManualDispatchTask(db.Model):
     organizing_unit_id = db.Column(db.Integer, db.ForeignKey('dispatch_units.id'), comment='组开单位ID，关联派车单位表')
     transport_type = db.Column(db.String(50), comment='运输类型')
     requirement_type = db.Column(db.String(50), comment='需求类型')
-    standard_weight = db.Column(db.String(20), comment='标准吨位')
-    standard_volume = db.Column(db.Integer, comment='标准容积')
-    actual_volume = db.Column(db.Integer, comment='实际需求容积')
+    required_weight = db.Column(db.String(20), comment='需求吨位')
+    required_volume = db.Column(db.Integer, comment='需求容积')
+    actual_weight = db.Column(db.String(20), comment='实际吨位')
+    actual_volume = db.Column(db.Integer, comment='实际容积')
     special_requirements = db.Column(db.Text, comment='特殊要求')
     status = db.Column(db.String(20), default='待审核', comment='任务状态')
     dispatch_track = db.Column(db.String(10), comment='派车轨道')
@@ -63,8 +64,9 @@ class ManualDispatchTask(db.Model):
             'organizing_unit_obj': self.organizing_unit_obj.to_dict() if self.organizing_unit_obj else None,
             'transport_type': self.transport_type,
             'requirement_type': self.requirement_type,
-            'standard_weight': self.standard_weight,
-            'standard_volume': self.standard_volume,
+            'required_weight': self.required_weight,
+            'required_volume': self.required_volume,
+            'actual_weight': self.actual_weight,
             'actual_volume': self.actual_volume,
             'special_requirements': self.special_requirements,
             'status': self.status,

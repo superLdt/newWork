@@ -304,6 +304,30 @@ class VehicleCapacityReferenceController:
     
     @staticmethod
     @permission_required('vehicle:read')
+    def get_available_carriages():
+        """
+        获取可用车厢列表
+        ---
+        tags:
+          - 车辆容积参考管理
+        responses:
+          200:
+            description: 成功获取可用车厢列表
+          500:
+            description: 服务器错误
+        """
+        try:
+            # 调用服务层获取可用车厢列表
+            carriages = VehicleCapacityReferenceService.get_available_carriages()
+            
+            # 返回成功响应
+            return success_response(carriages)
+        except Exception as e:
+            logger.error(f"获取可用车厢列表失败: {str(e)}")
+            return error_response(str(e), 500)
+    
+    @staticmethod
+    @permission_required('vehicle:read')
     def search_vehicles():
         """
         搜索车辆
