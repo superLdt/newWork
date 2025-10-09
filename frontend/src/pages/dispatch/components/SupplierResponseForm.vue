@@ -49,13 +49,13 @@
           label-width="120px"
           label-position="right"
         >
-          <!-- 必填字段：路单流水号和派车单号 -->
+    <!-- 必填字段：路单流水号和派车单号 -->
           <el-row :gutter="20">
             <el-col :span="12">
-              <el-form-item label="路单流水号" prop="manifest_number">
+    <el-form-item label="路单流水号" prop="manifest_number">
                 <el-input 
                   v-model="responseForm.manifest_number" 
-                  placeholder="请输入路单流水号"
+        placeholder="请输入路单流水号"
                   clearable
                 />
               </el-form-item>
@@ -522,7 +522,7 @@ export default {
     // 表单验证规则
     const responseRules = {
       manifest_number: [
-        { required: true, message: '请输入路单流水号', trigger: 'blur' }
+      { required: true, message: '请输入路单流水号', trigger: 'blur' }
       ],
       dispatch_number: [
         { required: true, message: '请输入派车单号', trigger: 'blur' }
@@ -865,7 +865,10 @@ export default {
         vehicle_category: v.vehicle_category,
         standard_volume: v.standard_volume,
         original_capacity: v.original_capacity,
-        suppliers: v.suppliers
+        suppliers: v.suppliers,
+        // 新增：实际容积与需求容积，用于后端写入
+        actual_volume: v.standard_volume,
+        required_volume: props.task?.required_volume || 0
       }))
 
       // 如果有选择车厢，也添加到vehicles数组中（或者根据API需求调整）
@@ -875,7 +878,10 @@ export default {
         vehicle_category: c.vehicle_category,
         standard_volume: c.standard_volume,
         original_capacity: c.original_capacity,
-        suppliers: c.suppliers
+        suppliers: c.suppliers,
+        // 新增：车厢实际容积与需求容积
+        actual_volume: c.standard_volume,
+        required_volume: props.task?.required_volume || 0
       }))
     }
 
@@ -938,9 +944,15 @@ export default {
     }
 
     // 获取可用车辆（使用VehicleCapacityReference接口）
-    const fetchAvailableVehicles = async () => {
+    const fetchAvailableVehicles = async (retryCount = 0) => {
       loadingVehicles.value = true
       try {
+        // 如果权限未初始化，尝试重新初始化
+        if (!permissionStore.userInfo && retryCount < 2) {
+          console.log('权限信息未初始化，尝试重新加载...')
+          await permissionStore.initializeFromToken()
+        }
+        
         if (!hasResponsePermission.value) {
           // 无权限时不发起请求，直接退出
           allVehicles.value = []
@@ -950,6 +962,18 @@ export default {
         allVehicles.value = result.data || []
       } catch (e) {
         console.error('获取可用车辆失败:', e)
+        
+        // 如果是权限错误且还有重试机会，尝试重新初始化权限
+        if ((e.code === 401 || e.code === 403) && retryCount < 1) {
+          console.log('权限错误，尝试重新初始化权限...')
+          try {
+            await permissionStore.refreshPermissions()
+            return await fetchAvailableVehicles(retryCount + 1)
+          } catch (refreshError) {
+            console.error('权限刷新失败:', refreshError)
+          }
+        }
+        
         ElMessage.error('获取可用车辆失败')
       } finally {
         loadingVehicles.value = false
@@ -957,9 +981,15 @@ export default {
     }
 
     // 获取可用车厢（使用VehicleCapacityReference接口）
-    const fetchAvailableCarriages = async () => {
+    const fetchAvailableCarriages = async (retryCount = 0) => {
       loadingCarriages.value = true
       try {
+        // 如果权限未初始化，尝试重新初始化
+        if (!permissionStore.userInfo && retryCount < 2) {
+          console.log('权限信息未初始化，尝试重新加载...')
+          await permissionStore.initializeFromToken()
+        }
+        
         if (!hasResponsePermission.value) {
           // 无权限时不发起请求，直接退出
           allCarriages.value = []
@@ -969,6 +999,18 @@ export default {
         allCarriages.value = result.data || []
       } catch (e) {
         console.error('获取可用车厢失败:', e)
+        
+        // 如果是权限错误且还有重试机会，尝试重新初始化权限
+        if ((e.code === 401 || e.code === 403) && retryCount < 1) {
+          console.log('权限错误，尝试重新初始化权限...')
+          try {
+            await permissionStore.refreshPermissions()
+            return await fetchAvailableCarriages(retryCount + 1)
+          } catch (refreshError) {
+            console.error('权限刷新失败:', refreshError)
+          }
+        }
+        
         ElMessage.error('获取可用车厢失败')
       } finally {
         loadingCarriages.value = false

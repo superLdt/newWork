@@ -105,8 +105,14 @@ class Permission(db.Model):
             
             # 供应商响应权限
             {'name': '供应商响应', 'code': 'supplier:respond', 'description': '供应商响应调度任务', 'resource_type': 'api', 'resource_id': '/dispatch/supplier-response', 'action': 'write'},
+            {'name': '供应商确认', 'code': 'supplier:confirm', 'description': '供应商确认调度任务', 'resource_type': 'api', 'resource_id': '/dispatch/tasks/*/confirm', 'action': 'write'},
+            {'name': '供应商申诉', 'code': 'supplier:appeal', 'description': '供应商提交调度任务申诉', 'resource_type': 'api', 'resource_id': '/dispatch/tasks/*/appeal', 'action': 'write'},
             {'name': '班组派车', 'code': 'team:assign', 'description': '班组长派车响应', 'resource_type': 'api', 'resource_id': '/dispatch/team-response', 'action': 'write'},
             {'name': '大容积供应商派车', 'code': 'large_capacity_supplier:assign', 'description': '大容积供应商派车响应', 'resource_type': 'api', 'resource_id': '/dispatch/large-capacity-supplier-response', 'action': 'write'},
+            
+            # 文件上传权限
+            {'name': '上传图片', 'code': 'upload:image', 'description': '上传图片文件', 'resource_type': 'api', 'resource_id': '/api/v1/upload/image', 'action': 'write'},
+            
         # 为了向后兼容，保留原有权限
         {'name': '外包派车', 'code': 'outsourcing:assign', 'description': '外包管理公司派车响应（已废弃）', 'resource_type': 'api', 'resource_id': '/dispatch/outsourcing-response', 'action': 'write'},
         ]

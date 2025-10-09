@@ -3,7 +3,7 @@ import axios from 'axios'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: '/api/v1', // 通过Vite代理避免CORS
+  baseURL: import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api/v1` : '/api/v1', // 通过Vite代理避免CORS
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -42,74 +42,95 @@ api.interceptors.request.use(
 // 响应拦截器
 api.interceptors.response.use(
   (response) => {
+    // 直接返回响应数据
     return response.data
   },
   async (error) => {
     const originalRequest = error.config
-    const status = error.response?.status
-    const requestUrl = originalRequest?.url || ''
-    const currentPath = window.location?.pathname || ''
-
-    // 统一处理错误响应，确保错误信息结构一致
-    const errorResponse = {
-      code: status || 500,
-      message: error.response?.data?.message || error.message || '请求失败',
-      data: error.response?.data
-    }
-
-    // 401 未授权处理
-    if (status === 401 && !originalRequest._retry) {
-      // 对于登录接口或当前已在登录页，避免重定向，防止页面重载导致提示秒闪
-      const isLoginRequest = requestUrl.includes('/auth/login')
-      const alreadyOnLogin = currentPath === '/login'
-
-      if (isLoginRequest || alreadyOnLogin) {
-        return Promise.reject(errorResponse)
+    
+    // 401 未授权错误处理
+    if (error.response?.status === 401) {
+      // 如果是登录请求失败，直接返回错误
+      if (originalRequest.url?.includes('/auth/login')) {
+        return Promise.reject(error.response?.data || error)
       }
-
+      
+      // 如果已经在登录页，不需要重定向
+      if (window.location.pathname === '/login') {
+        return Promise.reject(error.response?.data || error)
+      }
+      
+      // 如果正在刷新token，将请求加入队列
       if (isRefreshing) {
-        return new Promise(function(resolve, reject) {
+        return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         }).then(token => {
-          originalRequest.headers['Authorization'] = 'Bearer ' + token
+          originalRequest.headers['Authorization'] = `Bearer ${token}`
           return api(originalRequest)
         }).catch(err => {
           return Promise.reject(err)
         })
       }
-
-      originalRequest._retry = true
-      isRefreshing = true
-
-      try {
-        // 尝试刷新token
-        const refreshToken = localStorage.getItem('refreshToken') // 假设有refreshToken
-        if (!refreshToken) {
-          // 没有refreshToken，直接跳转登录
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
-          return Promise.reject(errorResponse)
-        }
+      
+      // 尝试刷新token
+      const refreshToken = localStorage.getItem('refreshToken')
+      if (refreshToken && !originalRequest._retry) {
+        originalRequest._retry = true
+        isRefreshing = true
         
-        // 实际的刷新token请求，这里需要根据后端接口调整
-        const refreshResponse = await axios.post('/api/v1/auth/refresh', { refreshToken })
-        const newToken = refreshResponse.data.token
-        localStorage.setItem('token', newToken)
-        processQueue(null, newToken)
-        return api(originalRequest)
-      } catch (refreshError) {
-        processQueue(refreshError, null)
+        try {
+          const response = await api.post('/auth/refresh', {
+            refresh_token: refreshToken
+          })
+          
+          const { access_token } = response.data
+          localStorage.setItem('token', access_token)
+          
+          // 处理队列中的请求
+          processQueue(null, access_token)
+          
+          // 重试原请求
+          originalRequest.headers['Authorization'] = `Bearer ${access_token}`
+          return api(originalRequest)
+        } catch (refreshError) {
+          // 刷新失败，清除认证信息并跳转登录
+          processQueue(refreshError, null)
+          localStorage.removeItem('token')
+          localStorage.removeItem('refreshToken')
+          
+          // 清除权限store
+          const { usePermissionStore } = await import('@/stores/permission')
+          const permissionStore = usePermissionStore()
+          permissionStore.clearPermissions()
+          
+          // 跳转到登录页
+          window.location.href = '/login'
+          return Promise.reject(refreshError)
+        } finally {
+          isRefreshing = false
+        }
+      } else {
+        // 没有refreshToken或已经重试过，清除认证信息并跳转登录
         localStorage.removeItem('token')
-        localStorage.removeItem('user')
+        localStorage.removeItem('refreshToken')
+        
+        // 清除权限store
+        const { usePermissionStore } = await import('@/stores/permission')
+        const permissionStore = usePermissionStore()
+        permissionStore.clearPermissions()
+        
         window.location.href = '/login'
-        return Promise.reject(errorResponse)
-      } finally {
-        isRefreshing = false
       }
     }
     
-    return Promise.reject(errorResponse)
+    // 403 权限不足错误处理
+    if (error.response?.status === 403) {
+      console.warn('权限不足:', error.response?.data?.message || '您没有权限执行此操作')
+      // 不自动跳转，让组件自己处理权限错误
+    }
+    
+    // 其他错误直接返回
+    return Promise.reject(error.response?.data || error)
   }
 )
 

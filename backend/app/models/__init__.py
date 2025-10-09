@@ -11,6 +11,9 @@ from .task import ManualDispatchTask
 from .vehicle.vehicle import Vehicle
 from .dispatch_status_history import DispatchStatusHistory
 from .vehicle.vehicle_capacity_reference import VehicleCapacityReference
+from .vehicle.vehicle_merge_record import VehicleMergeRecord
+from .vehicle.vehicle_downgrade_record import VehicleDowngradeRecord
+
 # 权限相关模型
 from .permission import Permission
 from .menu import Menu
@@ -28,6 +31,9 @@ __all__ = [
     'user_role',
     'DispatchStatusHistory',
     'VehicleCapacityReference',
+    'VehicleMergeRecord',
+    'VehicleDowngradeRecord',
+
     # 权限相关模型
     'Permission',
     'Menu',

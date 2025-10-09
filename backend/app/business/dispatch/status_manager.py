@@ -10,6 +10,7 @@ from app.models.dispatch_status_history import DispatchStatusHistory
 from app.services.dispatch.dispatch_service import DispatchService
 from flask import g
 from datetime import datetime
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,13 +23,17 @@ class DispatchStatusManager:
     
     # 状态转换映射，定义了状态之间的合法转换关系
     STATUS_TRANSITIONS = {
-        'pending': ['approved', 'rejected'],  # 待审核 -> 已审核/已拒绝
-        'approved': ['assigned', 'cancelled'],  # 已审核 -> 已分配/已取消
-        'rejected': ['pending', 'cancelled'],  # 已拒绝 -> 待审核/已取消
-        'assigned': ['in_progress', 'cancelled'],  # 已分配 -> 进行中/已取消
-        'in_progress': ['completed', 'cancelled'],  # 进行中 -> 已完成/已取消
-        'completed': [],  # 已完成（终态）
-        'cancelled': []  # 已取消（终态）
+        'pending': ['approved', 'rejected'],           # 待审核 -> 审核通过/审核拒绝
+        'approved': ['in_progress', 'pending_verification', 'cancelled'],      # 审核通过 -> 已响应/待核查/已取消
+        'in_progress': ['pending_verification', 'cancelled'],  # 已响应 -> 待核查/已取消
+        'pending_verification': ['verified', 'cancelled'],  # 待核查 -> 已核查/已取消
+        'verified': ['pending_confirmation', 'cancelled'],  # 已核查 -> 待确认/已取消
+        'pending_confirmation': ['confirmed', 'appeal_pending', 'cancelled'],    # 待确认 -> 已确认/申诉待审核/已取消
+        'confirmed': ['completed', 'cancelled'],       # 已确认 -> 任务完成/已取消
+        'appeal_pending': ['completed', 'cancelled'],  # 申诉待审核 -> 任务完成/已取消
+        'rejected': ['pending', 'cancelled'],          # 审核拒绝 -> 待审核/已取消
+        'completed': [],                               # 任务完成（终态）
+        'cancelled': []                                # 已取消（终态）
     }
     
     # 新增：将中英文状态规范化到英文代码
@@ -38,16 +43,17 @@ class DispatchStatusManager:
             '待审核': 'pending',
             '审核通过': 'approved',
             '审核拒绝': 'rejected',
-            '已分配': 'assigned',
-            '进行中': 'in_progress',
+            '待核查': 'pending_verification',
+            '待车间核查': 'pending_verification',
+            '已核查': 'verified',
+            '待确认': 'pending_confirmation',
+            '已确认': 'confirmed',
+            '申诉待审核': 'appeal_pending',
             '任务完成': 'completed',
             '已取消': 'cancelled',
-            # 业务中提到的供应商相关状态做合理映射
-            '待供应商响应': 'approved',
-            '供应商已响应': 'in_progress',
-            # 修正：通用“待响应”应视为审核通过阶段
+            # 修正：通用"待响应"应视为审核通过阶段
             '待响应': 'approved',
-            # 统一：通用“已响应”视为进入进行中阶段
+            # 统一：通用"已响应"视为进入进行中阶段
             '已响应': 'in_progress'
         }
         # 已经是英文代码或未识别的状态原样返回
@@ -82,7 +88,7 @@ class DispatchStatusManager:
         return True
 
     @staticmethod
-    def update_task_status(task_id: str, new_status: str, comment: str = None) -> dict:
+    def update_task_status(task_id: str, new_status: str, comment: Optional[str] = None) -> dict:
         """
         更新任务状态并记录状态历史
         
@@ -101,7 +107,7 @@ class DispatchStatusManager:
             raise ValueError(f"任务不存在: {task_id}")
         
         # 验证状态转换
-        current_status = task.get('status')
+        current_status = task.get('status', '')
         if not DispatchStatusManager.validate_status_transition(current_status, new_status):
             raise ValueError(f"不允许从 {current_status} 转换到 {new_status}")
         
@@ -118,7 +124,7 @@ class DispatchStatusManager:
             previous_status=current_status,
             new_status=new_status,
             operator_role=operator_role or '系统',
-            business_type=task.get('business_type')
+            business_type=task.get('business_type') or ''
         )
         
         # 准备状态历史数据
@@ -146,24 +152,13 @@ class DispatchStatusManager:
             task_id: 任务ID（字符串）
             
         返回:
-            list: 状态流转记录列表
+            list: 状态流转记录列表（直接与 dispatch_status_history 表结构对齐）
         """
-        # 获取任务状态历史
+        # 获取任务状态历史（模型 to_dict 已包含 status_change/operator/timestamp/note/next_handler_role 等字段）
         status_history = DispatchService.get_task_status_history(task_id)
         
-        # 格式化状态流转记录
-        status_flow = []
-        for history in status_history:
-            status_flow.append({
-                'id': history.get('id'),
-                'previous_status': history.get('previous_status'),
-                'new_status': history.get('new_status'),
-                'changed_by': history.get('changed_by'),
-                'changed_at': history.get('changed_at'),
-                'comment': history.get('comment')
-            })
-        
-        return status_flow
+        # 直接返回，确保前端展示与数据库记录一致
+        return status_history
     
     @staticmethod
     def get_next_possible_statuses(current_status: str) -> list:
@@ -200,28 +195,56 @@ class DispatchStatusManager:
         return status
 
     @staticmethod
-    def get_next_handler_role(previous_status: str, new_status: str, operator_role: str, business_type: str = None) -> str:
+    def get_next_handler_role(previous_status: str, new_status: str, operator_role: str, business_type: Optional[str] = None) -> str:
         """
-        统一确定“状态 → 下一阶段操作人角色”的规则，避免业务层硬编码
+        统一确定"状态 → 下一阶段操作人角色"的规则，避免业务层硬编码
         
         参数：
             previous_status: 变更前状态（可中文/英文）
             new_status: 变更新状态（可中文/英文）
             operator_role: 执行本次操作的角色（如：供应商/大容积供应商/班组长/区域调度员）
-            business_type: 业务类型（自办派车/委办派车），可选
+            business_type: 业务类型（自办派车/委办派车/大容积派车），可选
         返回：
             下一阶段操作人角色
         """
+        # 规范化状态到英文代码
+        norm_previous = DispatchStatusManager._normalize_status(previous_status)
         norm_new = DispatchStatusManager._normalize_status(new_status)
-        # 新增：审核通过阶段（含中文“待响应”规范化为 approved）由业务类型决定下一处理角色
+
+        # 根据新状态确定下一处理人角色
+        # 审核阶段（待审核 -> 审核通过/审核拒绝）：由超级管理员/区域调度员完成
+        if norm_new == 'pending':
+            return '区域调度员'
+            
+        # 响应阶段（审核通过 -> 已响应）：由供应商/班组长/大容积供应商完成
         if norm_new == 'approved':
-            bt = (business_type or '').strip()
-            if bt == '自办派车':
-                return '班组长'
-            # 默认（含委办派车）：供应商
-            return '供应商'
-        # 统一：凡是“响应派车”进入进行中（含中文“已响应”规范化后）——下一处理人一律为“车间地调”
+            # 使用基类方法根据业务类型确定下一处理人角色
+            from app.business.dispatch.base_business import BaseDispatchBusiness
+            return BaseDispatchBusiness._get_next_handler_role_by_business_type(business_type or '')
+            
+        # 核查阶段（已响应 -> 待核查）：由车间地调完成
         if norm_new == 'in_progress':
             return '车间地调'
+
+        # 进入待核查/待车间核查阶段后，下一处理人仍为车间地调
+        if norm_new == 'pending_verification':
+            return '车间地调'
+            
+        # 确认阶段（已核查 -> 待确认）：由供应商/班组长/大容积供应商完成
+        if norm_new == 'verified':
+            # 使用基类方法根据业务类型确定下一处理人角色
+            from app.business.dispatch.base_business import BaseDispatchBusiness
+            return BaseDispatchBusiness._get_next_handler_role_by_business_type(business_type or '')
+            
+        # 确认阶段（待确认 -> 已确认）：由供应商/班组长/大容积供应商完成
+        if norm_new == 'pending_confirmation':
+            # 使用基类方法根据业务类型确定下一处理人角色
+            from app.business.dispatch.base_business import BaseDispatchBusiness
+            return BaseDispatchBusiness._get_next_handler_role_by_business_type(business_type or '')
+            
+        # 完成阶段（已确认 -> 任务完成）：由区域调度员完成
+        if norm_new == 'confirmed':
+            return '区域调度员'
+            
         # 默认回退规则（非上述场景）
         return '区域调度员'

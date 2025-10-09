@@ -107,7 +107,7 @@
             <span>{{ task.dispatch_track }}</span>
           </div>
           <div class="info-row">
-            <label>实际容积:</label>
+            <label>需求容积:</label>
             <span>{{ task.required_volume }} m³</span>
             <span v-if="tonnageVolumeRange"> (容积区间: {{ tonnageVolumeRange }})</span>
           </div>
@@ -158,24 +158,29 @@
         <div class="vehicle-card" v-for="vehicle in task.vehicles" :key="vehicle.vehicle_id">
           <div class="vehicle-header">
             <div class="vehicle-plate">{{ vehicle.plate_number }}</div>
-            <el-tag size="small" type="success">{{ vehicle.vehicle_type }}</el-tag>
+            <div class="vehicle-tags">
+              <el-tag size="small" type="success">{{ vehicle.vehicle_type }}</el-tag>
+              <el-tag size="small" type="warning" v-if="vehicle.capacity || vehicle.original_capacity">
+                {{ (vehicle.capacity || vehicle.original_capacity) + '吨' }}
+              </el-tag>
+            </div>
           </div>
           <div class="vehicle-info">
             <div class="info-item">
-              <el-icon><UserFilled /></el-icon>
-              <span>{{ vehicle.driver_name }}</span>
+              <el-icon><Document /></el-icon>
+            <span>路单流水号: {{ vehicle.manifest_number || '未提供' }}</span>
             </div>
             <div class="info-item">
-              <el-icon><Phone /></el-icon>
-              <span>{{ vehicle.driver_phone }}</span>
-            </div>
-            <div class="info-item">
-              <el-icon><Box /></el-icon>
-              <span>载重: {{ vehicle.capacity }} 吨</span>
+              <el-icon><Document /></el-icon>
+              <span>派车单: {{ vehicle.dispatch_number || '未提供' }}</span>
             </div>
             <div class="info-item">
               <el-icon><Box /></el-icon>
-              <span>容积: {{ vehicle.volume }} m³</span>
+              <span>实际容积: {{ vehicle.actual_volume || vehicle.volume || '未提供' }} m³</span>
+            </div>
+            <div class="info-item">
+              <el-icon><Box /></el-icon>
+              <span>需求容积: {{ vehicle.required_volume || task.required_volume || '未提供' }} m³</span>
             </div>
           </div>
           <div class="vehicle-notes" v-if="vehicle.notes">
@@ -199,21 +204,21 @@
             v-for="(history, index) in task.status_history"
             :key="index"
             :timestamp="formatDateTime(history.timestamp)"
-            :type="getTimelineItemType(history.status)"
+            :type="getTimelineItemType(history.status_change || history.status)"
             :hollow="index !== 0"
             size="large"
           >
             <div class="timeline-content">
-              <div class="timeline-title">{{ history.status }}</div>
+              <div class="timeline-title">{{ getStatusText(history.status_change || history.status) }}</div>
               <div class="timeline-info">
-                <div class="operator">操作人: {{ userFullNames[normalizeUserId(history.operator)] || normalizeUserId(history.operator) }}</div>
-                <div class="comment" v-if="history.comment">{{ history.comment }}</div>
+                <div class="operator">操作人: {{ history.operator || '系统' }}</div>
+                <div class="comment" v-if="history.note">{{ history.note }}</div>
                 <!-- 增强功能：显示下一阶段操作人信息 -->
                 <div class="next-operator" v-if="history.next_handler_role">
                   下一阶段操作人角色: {{ history.next_handler_role }}
                 </div>
-                <div class="next-operator" v-else-if="getNextHandlerRole(history.status)">
-                  下一阶段操作人角色: {{ getNextHandlerRole(history.status) }}
+                <div class="next-operator" v-else-if="getNextHandlerRole(history.status_change || history.status)">
+                  下一阶段操作人角色: {{ getNextHandlerRole(history.status_change || history.status) }}
                 </div>
               </div>
             </div>
@@ -246,66 +251,30 @@
       </template>
     </el-dialog>
 
-    <!-- 车间地调核实核实操作对话框 -->
-    <el-dialog
-      v-model="workshopVerificationDialogVisible"
-      title="车间地调核实操作"
-      width="600px"
-    >
-      <el-form :model="workshopVerificationForm" label-width="100px">
-        <el-form-item label="操作类型" required>
-          <el-radio-group v-model="workshopVerificationForm.action">
-            <el-radio label="verify_pass">核实通过</el-radio>
-            <el-radio label="downgrade">降档处理</el-radio>
-            <el-radio label="merge">合并任务</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        
-        <!-- 降档处理时显示 -->
-        <el-form-item 
-          v-if="workshopVerificationForm.action === 'downgrade'" 
-          label="降档吨位" 
-          required
-        >
-          <el-input
-            v-model="workshopVerificationForm.downgradeTonnage"
-            placeholder="请输入降档后的吨位，如：8吨"
-          />
-        </el-form-item>
-        
-        <!-- 合并任务时显示 -->
-        <el-form-item 
-          v-if="workshopVerificationForm.action === 'merge'" 
-          label="合并到任务" 
-          required
-        >
-          <el-input
-            v-model="workshopVerificationForm.mergeTaskId"
-            placeholder="请输入要合并到的任务ID"
-          />
-        </el-form-item>
-        
-        <el-form-item label="操作备注">
-          <el-input
-            v-model="workshopVerificationForm.comment"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入操作备注..."
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="workshopVerificationDialogVisible = false">取消</el-button>
-        <el-button 
-          type="primary" 
-          @click="confirmWorkshopVerification" 
-          :loading="submitting"
-          :disabled="!workshopVerificationForm.action"
-        >
-          确认操作
-        </el-button>
-      </template>
-    </el-dialog>
+    <!-- 供应商确认对话框 -->
+    <SupplierConfirmDialog
+      v-model:visible="supplierConfirmDialogVisible"
+      :task="task"
+      @confirm-success="handleSupplierConfirmSuccess"
+      @close="handleSupplierConfirmClose"
+      @open-appeal-dialog="handleOpenAppealDialog"
+    />
+
+    <!-- 供应商申诉对话框 -->
+    <SupplierAppealDialog
+      v-model:visible="supplierAppealDialogVisible"
+      :task="task"
+      @appeal-success="handleAppealSuccess"
+    />
+
+    <!-- 申诉审核对话框 -->
+    <AppealReviewDialog
+      v-model:visible="appealReviewDialogVisible"
+      :task="task"
+      @appeal-review-success="handleAppealReviewSuccess"
+    />
+
+
   </div>
 </template>
 
@@ -319,8 +288,13 @@ import {
 import { usePermissionStore } from '@/stores/permission'
 import { apiService } from '@/services/api'
 import SupplierResponseForm from './SupplierResponseForm.vue'
+import SupplierConfirmDialog from './SupplierConfirmDialog.vue'
+import SupplierAppealDialog from './SupplierAppealDialog.vue'
+import AppealReviewDialog from './AppealReviewDialog.vue'
 import { useUserStore } from '@/stores/user'
 import tonnageVolumeService from '@/services/tonnageVolumeService'
+import { dispatchService } from '@/services/dispatchService'
+import { useRouter } from 'vue-router'
 
 export default {
   name: 'TaskDetail',
@@ -334,33 +308,35 @@ export default {
     Box,
     Clock,
     ChatDotRound,
-    SupplierResponseForm
+    SupplierResponseForm,
+    SupplierConfirmDialog,
+    SupplierAppealDialog,
+    AppealReviewDialog
   },
   props: {
     task: {
       type: Object,
       required: true
+    },
+    autoOpenWorkshopVerify: {
+      type: Boolean,
+      default: false
     }
   },
   setup(props, { emit }) {
     const permissionStore = usePermissionStore()
     const userStore = useUserStore()
+    const router = useRouter()
     const actionDialogVisible = ref(false)
     const supplierResponseDialogVisible = ref(false)
-    const workshopVerificationDialogVisible = ref(false) // 车间地调核实操作对话框
+    const supplierConfirmDialogVisible = ref(false)
+    const supplierAppealDialogVisible = ref(false)
+    const appealReviewDialogVisible = ref(false)
     const currentAction = ref(null)
     const submitting = ref(false)
     const loadingActions = reactive({})
     const userFullNames = reactive({}) // 用于存储用户ID到姓名的映射
     const tonnageVolumeData = ref(null) // 吨位容积数据
-
-    // 车间地调核实操作表单
-    const workshopVerificationForm = reactive({
-      action: '', // 'verify_pass', 'downgrade', 'merge'
-      comment: '',
-      mergeTaskId: '', // 合并时的目标任务ID
-      downgradeTonnage: '' // 降档时的新吨位
-    })
 
     // 格式化需求吨位显示
     const formattedRequiredWeight = computed(() => {
@@ -460,17 +436,15 @@ export default {
     const normalizeStatus = (status) => {
       if (!status) return ''
       const map = {
+        '待审核': 'pending',
         '待响应': 'awaiting_supplier_response',
         '待供应商响应': 'awaiting_supplier_response',
-        '待班组派车': 'awaiting_team_assignment',
+        '待核查': 'awaiting_verification',
+        '待确认': 'awaiting_confirmation',
         '已审批': 'approved',
         '已拒绝': 'rejected',
         '已完成': 'completed',
-        '进行中': 'in_progress',
-        '已分配': 'assigned',
-        '已确认': 'confirmed',
-        '最终确认': 'final_confirmed',
-        '已发车': 'departed'
+        '已取消': 'cancelled'
       }
       return map[status] || status
     }
@@ -479,37 +453,28 @@ export default {
     const roleActionMap = {
       '区域调度员': {
         '待审核': ['approve', 'reject'],
-        '审核拒绝': ['approve', 'reject']
+        '审核拒绝': ['approve', 'reject'],
+        '申诉待审核': ['appeal_review']
       },
       '超级管理员': {
         '待审核': ['approve', 'reject'],
-        '审核拒绝': ['approve', 'reject']
+        '审核拒绝': ['approve', 'reject'],
+        '申诉待审核': ['appeal_review']
       },
       '供应商': {
         '待响应': ['respond'],
-        '已响应': ['confirm'],
-        '核实通过': ['confirm'],
-        '已降档': ['respond'],
-        '已合并': ['respond']
+        '待确认': ['confirm']
       },
       '班组长': {
         '待响应': ['respond'],
-        '已响应': ['confirm'],
-        '核实通过': ['confirm'],
-        '已降档': ['respond'],
-        '已合并': ['respond']
+        '待确认': ['confirm']
       },
       '大容积供应商': {
         '待响应': ['respond'],
-        '已响应': ['confirm'],
-        '核实通过': ['confirm'],
-        '已降档': ['respond'],
-        '已合并': ['respond']
+        '待确认': ['confirm']
       },
       '车间地调': {
-        '已响应': ['workshop_verify'],
-        'supplier_responded': ['workshop_verify'],
-        'team_assigned': ['workshop_verify']
+        '待核查': ['workshop_verify']
       }
     }
 
@@ -518,8 +483,9 @@ export default {
       approve: { label: '审核通过', type: 'primary', icon: 'Check' },
       reject: { label: '审核拒绝', type: 'danger', icon: 'Close' },
       respond: { label: '响应任务', type: 'success', icon: 'Message' },
-      confirm: { label: '确认发车', type: 'warning', icon: 'CircleCheck' },
-      workshop_verify: { label: '核实操作', type: 'primary', icon: 'View' }
+      confirm: { label: '确认任务', type: 'warning', icon: 'CircleCheck' },
+      workshop_verify: { label: '核实操作', type: 'primary', icon: 'View' },
+      appeal_review: { label: '申诉审核', type: 'warning', icon: 'Document' }
     }
 
     // 可用操作按钮
@@ -573,17 +539,11 @@ export default {
         pending: '待审核',
         approved: '已审批',
         rejected: '已拒绝',
-        awaiting_supplier_response: '待供应商响应',
-        awaiting_team_assignment: '待班组派车',
-        supplier_responded: '供应商已响应',
-        team_assigned: '班组已派车',
-        assigned: '已分配',
-        confirmed: '已确认',
-        final_confirmed: '最终确认',
-        departed: '已发车',
+        awaiting_supplier_response: '待响应',
+        awaiting_verification: '待核查',
+        awaiting_confirmation: '待确认',
         completed: '已完成',
-        cancelled: '已取消',
-        in_progress: '进行中'
+        cancelled: '已取消'
       }
       return statusTextMap[s] || status
     }
@@ -740,8 +700,14 @@ export default {
           // 打开供应商响应表单
           supplierResponseDialogVisible.value = true
         } else if (actionKey === 'workshop_verify') {
-          // 打开车间地调核实操作对话框
-          workshopVerificationDialogVisible.value = true
+          // 跳转到独立的车间地调核实页面
+          router.push({ name: 'WorkshopVerification', params: { taskId: props.task.task_id } })
+        } else if (actionKey === 'confirm') {
+          // 打开供应商确认对话框
+          supplierConfirmDialogVisible.value = true
+        } else if (actionKey === 'appeal_review') {
+          // 打开申诉审核对话框
+          appealReviewDialogVisible.value = true
         } else {
           actionForm.comment = ''
           actionDialogVisible.value = true
@@ -757,17 +723,35 @@ export default {
       loadingActions[currentAction.value.key] = true
 
       try {
-        // 模拟API调用
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        ElMessage.success(`${currentAction.value.label}成功`)
-        actionDialogVisible.value = false
-        
-        // 通知父组件刷新数据
-        emit('task-updated', {
-          action: currentAction.value.key,
-          comment: actionForm.comment
-        })
+        // 审核通过/拒绝：调用后端审核接口
+        if (currentAction.value.key === 'approve' || currentAction.value.key === 'reject') {
+          const approved = currentAction.value.key === 'approve'
+          const result = await dispatchService.auditTask(props.task.task_id, {
+            approved,
+            comment: actionForm.comment
+          })
+
+          if (result && result.code === 0) {
+            ElMessage.success(`${currentAction.value.label}成功`)
+            actionDialogVisible.value = false
+            // 通知父组件刷新数据
+            emit('task-updated', {
+              action: currentAction.value.key,
+              comment: actionForm.comment
+            })
+          } else {
+            ElMessage.error(result?.message || `${currentAction.value.label}失败`)
+          }
+        } else {
+          // 其他操作：保留原有模拟行为或在后续接入真实接口
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          ElMessage.success(`${currentAction.value.label}成功`)
+          actionDialogVisible.value = false
+          emit('task-updated', {
+            action: currentAction.value.key,
+            comment: actionForm.comment
+          })
+        }
       } catch (error) {
         ElMessage.error(`${currentAction.value.label}失败`)
       } finally {
@@ -801,72 +785,35 @@ export default {
       supplierResponseDialogVisible.value = false
     }
 
-    // 确认车间地调核实操作
-    const confirmWorkshopVerification = async () => {
-      if (!workshopVerificationForm.action) {
-        ElMessage.warning('请选择操作类型')
-        return
-      }
+    // 处理供应商确认成功
+    const handleSupplierConfirmSuccess = (result) => {
+      ElMessage.success('供应商确认成功')
+      supplierConfirmDialogVisible.value = false
+      emit('task-updated', result)
+    }
 
-      // 验证必填字段
-      if (workshopVerificationForm.action === 'downgrade' && !workshopVerificationForm.downgradeTonnage) {
-        ElMessage.warning('请输入降档吨位')
-        return
-      }
+    // 关闭供应商确认对话框
+    const handleSupplierConfirmClose = () => {
+      supplierConfirmDialogVisible.value = false
+    }
 
-      if (workshopVerificationForm.action === 'merge' && !workshopVerificationForm.mergeTaskId) {
-        ElMessage.warning('请输入要合并到的任务ID')
-        return
-      }
+    // 处理打开申诉对话框
+    const handleOpenAppealDialog = () => {
+      supplierAppealDialogVisible.value = true
+    }
 
-      submitting.value = true
+    // 处理申诉成功
+    const handleAppealSuccess = (result) => {
+      ElMessage.success('申诉提交成功，请等待审核')
+      supplierAppealDialogVisible.value = false
+      emit('task-updated', result)
+    }
 
-      try {
-        const requestData = {
-          task_id: props.task.id,
-          action: workshopVerificationForm.action,
-          comment: workshopVerificationForm.comment
-        }
-
-        // 根据操作类型添加额外参数
-        if (workshopVerificationForm.action === 'downgrade') {
-          requestData.downgrade_tonnage = workshopVerificationForm.downgradeTonnage
-        } else if (workshopVerificationForm.action === 'merge') {
-          requestData.merge_task_id = workshopVerificationForm.mergeTaskId
-        }
-
-        const response = await apiService.post('/api/v1/dispatch/workshop-verification', requestData)
-        
-        if (response.success) {
-          const actionLabels = {
-            'verify_pass': '核实通过',
-            'downgrade': '降档处理',
-            'merge': '合并任务'
-          }
-          
-          ElMessage.success(`${actionLabels[workshopVerificationForm.action]}成功`)
-          workshopVerificationDialogVisible.value = false
-          
-          // 重置表单
-          workshopVerificationForm.action = ''
-          workshopVerificationForm.comment = ''
-          workshopVerificationForm.mergeTaskId = ''
-          workshopVerificationForm.downgradeTonnage = ''
-          
-          // 通知父组件刷新数据
-          emit('task-updated', {
-            action: 'workshop_verification',
-            result: response.data
-          })
-        } else {
-          ElMessage.error(response.message || '操作失败')
-        }
-      } catch (error) {
-        console.error('车间地调核实操作失败:', error)
-        ElMessage.error('操作失败，请稍后重试')
-      } finally {
-        submitting.value = false
-      }
+    // 处理申诉审核成功
+    const handleAppealReviewSuccess = (result) => {
+      ElMessage.success('申诉审核完成')
+      appealReviewDialogVisible.value = false
+      emit('task-updated', result)
     }
 
     // 获取下一阶段操作人角色
@@ -890,11 +837,6 @@ export default {
     }
 
     onMounted(() => {
-      if (props.task.status_history) {
-        props.task.status_history.forEach(history => {
-          fetchUserFullName(history.operator)
-        })
-      }
       // 加载吨位容积数据
       loadTonnageVolumeData()
     })
@@ -906,6 +848,7 @@ export default {
       loadingActions,
       actionDialogVisible,
       supplierResponseDialogVisible,
+      supplierConfirmDialogVisible,
       currentAction,
       actionForm,
       getStatusAlertClass,
@@ -919,6 +862,13 @@ export default {
       getResponseDialogTitle,
       handleResponseSuccess,
       handleSupplierResponseClose,
+      handleSupplierConfirmSuccess,
+      handleSupplierConfirmClose,
+      supplierAppealDialogVisible,
+      handleOpenAppealDialog,
+      handleAppealSuccess,
+      appealReviewDialogVisible,
+      handleAppealReviewSuccess,
       userFullNames,
       normalizeUserId,
       tonnageVolumeRange,
@@ -1111,5 +1061,99 @@ export default {
   border-left: 3px solid #ffa000;
   font-weight: 500;
   color: #d2691e;
+}
+.vehicle-header {
+display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.vehicle-plate {
+  font-weight: 600;
+  font-size: 16px;
+}
+.vehicle-tags {
+  display: flex;
+  gap: 8px;
+}
+.vehicle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #555;
+  width: 100%; /* 确保每个项目独占一行 */
+}
+
+/* 车间核查对话框样式 */
+.verification-task-info {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+}
+
+.verification-task-info h4 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.task-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+}
+
+.info-item label {
+  font-weight: 500;
+  color: #666;
+  margin-right: 8px;
+  min-width: 80px;
+}
+
+.info-item span {
+  color: #333;
+  font-weight: 400;
+}
+
+.verification-vehicles-info {
+  margin-bottom: 20px;
+}
+
+.verification-vehicles-info h4 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.vehicles-table {
+  margin-bottom: 15px;
+}
+
+.verification-form h4 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .task-info-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -41,6 +41,9 @@ dispatch_bp.route('/tasks/<string:task_id>/next-statuses', methods=['GET'])(Disp
 # 获取任务操作日志
 dispatch_bp.route('/tasks/<string:task_id>/operation-logs', methods=['GET'])(DispatchController.get_task_operation_logs)
 
+# 获取任务操作记录（降档与合并）
+dispatch_bp.route('/tasks/<string:task_id>/operation-records', methods=['GET'])(DispatchController.get_task_operation_records)
+
 # 合并车辆路由
 dispatch_bp.route('/vehicles/merge', methods=['POST'])(DispatchController.merge_vehicles)
 
@@ -70,3 +73,21 @@ dispatch_bp.route('/tasks/team-response', methods=['POST'])(DispatchController.s
 
 # 外包响应路由
 dispatch_bp.route('/tasks/outsourcing-response', methods=['POST'])(DispatchController.submit_outsourcing_response)
+
+# 供应商确认任务路由
+dispatch_bp.route('/tasks/<string:task_id>/confirm', methods=['POST'])(DispatchController.confirm_supplier_task)
+
+# 大容积供应商确认任务路由
+dispatch_bp.route('/tasks/<string:task_id>/large-supplier-confirm', methods=['POST'])(DispatchController.confirm_large_supplier_task)
+
+# 供应商申诉任务列表路由
+dispatch_bp.route('/supplier/appeal-tasks', methods=['GET'])(DispatchController.get_supplier_appeal_tasks)
+
+# 供应商申诉路由
+dispatch_bp.route('/tasks/<string:task_id>/appeal', methods=['POST'])(DispatchController.submit_supplier_appeal)
+
+# 获取申诉详情路由
+dispatch_bp.route('/tasks/<string:task_id>/appeal', methods=['GET'])(DispatchController.get_appeal_info)
+
+# 申诉审核路由
+dispatch_bp.route('/tasks/<string:task_id>/appeal/review', methods=['POST'])(DispatchController.process_appeal_review)

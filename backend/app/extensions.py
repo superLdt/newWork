@@ -29,7 +29,7 @@ def init_extensions(app):
     """
     db.init_app(app)
     jwt.init_app(app)
-    migrate.init_app(app, db)
+    migrate.init_app(app, db, render_as_batch=True)
     
     # 可以在这里初始化其他扩展
     # cache.init_app(app)

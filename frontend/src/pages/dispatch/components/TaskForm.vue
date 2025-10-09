@@ -12,20 +12,22 @@
         <el-radio-group v-model="formData.business_type" @change="handleBusinessTypeChange">
           <el-radio-button label="委办派车">委办派车</el-radio-button>
           <el-radio-button label="自办派车">自办派车</el-radio-button>
+          <el-radio-button label="大容积派车">大容积派车</el-radio-button>
         </el-radio-group>
         <div style="font-size: 12px; color: #909399; margin-top: 5px;">
           <span v-if="formData.business_type === '委办派车'">委托外部供应商提供车辆和司机服务</span>
           <span v-if="formData.business_type === '自办派车'">使用自有车辆和司机执行运输任务</span>
+          <span v-if="formData.business_type === '大容积派车'">委托大容积供应商提供车辆和司机服务</span>
         </div>
       </el-form-item>
       
       <el-form-item label="需求日期" prop="required_date">
         <el-date-picker
           v-model="formData.required_date"
-          type="datetime"
-          placeholder="选择需求日期和时间"
-          format="YYYY-MM-DD HH:mm"
-          value-format="YYYY-MM-DD HH:mm:ss"
+          type="date"
+          placeholder="选择需求日期"
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
         ></el-date-picker>
       </el-form-item>
       
@@ -200,10 +202,6 @@ export default {
       if (typeof val === 'string') {
         const v = val.trim()
         if (v === '' || v.toLowerCase() === 'invalid date' || v.toLowerCase() === 'nan') return null
-        // YYYY-MM-DD HH:mm:ss
-        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(v)) return new Date(v.replace(' ', 'T'))
-        // YYYY-MM-DD HH:mm
-        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(v)) return new Date(v.replace(' ', 'T') + ':00')
         // YYYY-MM-DD
         if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(v)
         const d = new Date(v)
@@ -435,27 +433,9 @@ export default {
       
       await formRef.value.validate(async (valid, fields) => {
         if (valid) {
-          // 格式化日期时间为 'YYYY-MM-DD HH:mm:ss'
-          const formatDateTime = (val) => {
-            if (!val) return ''
-            if (typeof val === 'string') {
-              return val
-            }
-            const d = new Date(val)
-            const pad = (n) => String(n).padStart(2, '0')
-            const y = d.getFullYear()
-            const m = pad(d.getMonth() + 1)
-            const day = pad(d.getDate())
-            const h = pad(d.getHours())
-            const mi = pad(d.getMinutes())
-            const s = pad(d.getSeconds())
-            return `${y}-${m}-${day} ${h}:${mi}:${s}`
-          }
-
           // 整理表单数据，由父组件提交并处理消息
           const taskData = {
             ...formData,
-            required_date: formatDateTime(formData.required_date),
             status: '待审核',
             dispatch_track: '轨道B',
             initiator_role: '车间地调',

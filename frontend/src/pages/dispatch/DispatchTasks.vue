@@ -29,6 +29,7 @@
             <el-select v-model="filterForm.business_type" placeholder="选择业务类型" clearable>
               <el-option label="委办派车" value="委办派车"></el-option>
               <el-option label="自办派车" value="自办派车"></el-option>
+              <el-option label="大容积派车" value="大容积派车"></el-option>
             </el-select>
           </el-form-item>
           <el-form-item label="关键词">
@@ -52,7 +53,7 @@
         <el-table-column prop="task_id" label="任务ID" width="160"></el-table-column>
         <el-table-column prop="business_type" label="业务类型" width="100">
           <template #default="scope">
-            <el-tag :type="scope.row.business_type === '自办派车' ? 'success' : 'primary'">{{ scope.row.business_type }}</el-tag>
+            <el-tag :type="scope.row.business_type === '自办派车' ? 'success' : (scope.row.business_type === '大容积派车' ? 'warning' : 'primary')">{{ scope.row.business_type }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="required_date" label="需求日期" width="120"></el-table-column>
@@ -84,6 +85,24 @@
               v-if="canSeeSupplierResponse(scope.row)"
               @click="openSupplierResponseDialog(scope.row)"
             >{{ getRoleBasedResponseText(scope.row) }}</el-button>
+            <el-button 
+              size="small" 
+              type="success" 
+              v-if="canShowSupplierConfirm(scope.row)"
+              @click="openSupplierConfirmDialog(scope.row)"
+            >确认</el-button>
+            <el-button
+              size="small"
+              type="primary"
+              v-if="canShowWorkshopVerify(scope.row)"
+              @click="openWorkshopVerify(scope.row)"
+            >核查</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              v-if="canShowAppealReview(scope.row)"
+              @click="openAppealReviewDialog(scope.row)"
+            >申诉审核</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -115,6 +134,7 @@
       <TaskDetail 
         v-if="currentTask" 
         :task="currentTask" 
+        :autoOpenWorkshopVerify="autoOpenWorkshopVerify"
         @task-updated="handleTaskUpdated"
       />
     </el-dialog>
@@ -171,17 +191,43 @@
         @cancel="supplierResponseDialogVisible = false"
       />
     </el-dialog>
+    
+    <!-- 供应商确认对话框 -->
+    <SupplierConfirmDialog
+      v-model:visible="supplierConfirmDialogVisible"
+      :task="currentTask"
+      @confirm-success="handleSupplierConfirmSuccess"
+      @open-appeal-dialog="handleOpenAppealDialog"
+    />
+
+    <!-- 供应商申诉对话框 -->
+    <SupplierAppealDialog
+      v-model:visible="supplierAppealDialogVisible"
+      :task="currentTask"
+      @appeal-success="handleAppealSuccess"
+    />
+
+    <!-- 申诉审核对话框 -->
+    <AppealReviewDialog
+      v-model:visible="appealReviewDialogVisible"
+      :task="currentTask"
+      @review-success="handleAppealReviewSuccess"
+    />
   </div>
 </template>
 
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 import TaskDetail from './components/TaskDetail.vue'
 import TaskForm from './components/TaskForm.vue'
 import ApproveForm from './components/ApproveForm.vue'
 import AssignVehicleForm from './components/AssignVehicleForm.vue'
 import SupplierResponseForm from './components/SupplierResponseForm.vue'
+import SupplierConfirmDialog from './components/SupplierConfirmDialog.vue'
+import SupplierAppealDialog from './components/SupplierAppealDialog.vue'
+import AppealReviewDialog from './components/AppealReviewDialog.vue'
 import { usePermissionStore } from '@/stores/permission'
 import { dispatchService } from '@/services/dispatchService'
 
@@ -192,10 +238,14 @@ export default {
     TaskForm,
     ApproveForm,
     AssignVehicleForm,
-    SupplierResponseForm
+    SupplierResponseForm,
+    SupplierConfirmDialog,
+    SupplierAppealDialog,
+    AppealReviewDialog
   },
   setup() {
     const permissionStore = usePermissionStore()
+    const router = useRouter()
     
     // 数据状态
     const loading = ref(false)
@@ -211,7 +261,13 @@ export default {
     const approveDialogVisible = ref(false)
     const assignVehicleDialogVisible = ref(false)
     const supplierResponseDialogVisible = ref(false)
+    const supplierConfirmDialogVisible = ref(false)
+    const supplierAppealDialogVisible = ref(false)
+    const appealReviewDialogVisible = ref(false)
     
+    // 新增：自动打开车间地调核查
+    const autoOpenWorkshopVerify = ref(false)
+
     // 过滤表单
     const filterForm = reactive({
       status: '',
@@ -228,6 +284,7 @@ export default {
           page: currentPage.value,
           per_page: pageSize.value,
           status: filterForm.status,
+          business_type: filterForm.business_type,
           query: filterForm.query
         }
         const result = await dispatchService.getTasks(params)
@@ -255,6 +312,7 @@ export default {
     // 重置过滤条件
     const resetFilter = () => {
       filterForm.status = ''
+      filterForm.business_type = ''
       filterForm.query = ''
       searchTasks()
     }
@@ -384,10 +442,22 @@ export default {
         if (hasRole(['供应商', 'supplier'])) return '供应商响应'
 
         // 兜底：按业务类型
-        return taskRow?.business_type === '自办派车' ? '内部响应' : '供应商响应'
+        if (taskRow?.business_type === '自办派车') {
+          return '内部响应'
+        } else if (taskRow?.business_type === '大容积派车') {
+          return '大容积派车'
+        } else {
+          return '供应商响应'
+        }
       } catch(e) {
         // 异常时回退
-        return taskRow?.business_type === '自办派车' ? '内部响应' : '供应商响应'
+        if (taskRow?.business_type === '自办派车') {
+          return '内部响应'
+        } else if (taskRow?.business_type === '大容积派车') {
+          return '大容积派车'
+        } else {
+          return '供应商响应'
+        }
       }
     }
 
@@ -403,10 +473,22 @@ export default {
 
         // 兜底：结合业务类型
         const bt = currentTask.value?.business_type
-        return bt === '自办派车' ? '内部响应' : '供应商响应'
+        if (bt === '自办派车') {
+          return '内部响应'
+        } else if (bt === '大容积派车') {
+          return '大容积派车'
+        } else {
+          return '供应商响应'
+        }
       } catch (e) {
         const bt = currentTask.value?.business_type
-        return bt === '自办派车' ? '内部响应' : '供应商响应'
+        if (bt === '自办派车') {
+          return '内部响应'
+        } else if (bt === '大容积派车') {
+          return '大容积派车'
+        } else {
+          return '供应商响应'
+        }
       }
     }
 
@@ -484,6 +566,113 @@ export default {
       }
     }
 
+    // 按角色与任务状态决定是否显示确认按钮
+    const canShowSupplierConfirm = (taskRow) => {
+      try {
+        const rolesArr = Array.isArray(permissionStore.roles) ? permissionStore.roles : []
+        const hasRole = (names) => rolesArr.some(r => names.includes(r))
+
+        // 只有待确认状态的任务才显示确认按钮
+        if (taskRow?.status !== '待确认') return false
+
+        // 班组长、供应商和大容积供应商都可以进行确认
+        return hasRole(['班组长', 'team_leader', '供应商', 'supplier', '大容积供应商', 'large_capacity_supplier'])
+      } catch (e) {
+        return false
+      }
+    }
+
+    // 打开供应商确认对话框
+    const openSupplierConfirmDialog = (taskRow) => {
+      currentTask.value = taskRow
+      supplierConfirmDialogVisible.value = true
+    }
+
+    // 处理供应商确认成功
+    const handleSupplierConfirmSuccess = async (result) => {
+      try {
+        ElMessage.success('供应商确认成功，任务已完成')
+        supplierConfirmDialogVisible.value = false
+        await fetchTasks()
+        if (currentTask.value) {
+          const updated = taskList.value.find(t => t.task_id === currentTask.value.task_id)
+          if (updated) currentTask.value = { ...updated }
+        }
+      } catch (error) {
+        ElMessage.error('刷新任务列表失败')
+      }
+    }
+
+    // 处理打开申诉对话框
+    const handleOpenAppealDialog = (task) => {
+      currentTask.value = task
+      supplierAppealDialogVisible.value = true
+    }
+
+    // 处理申诉成功
+    const handleAppealSuccess = async (result) => {
+      try {
+        ElMessage.success('申诉提交成功，请等待审核')
+        supplierAppealDialogVisible.value = false
+        await fetchTasks()
+        if (currentTask.value) {
+          const updated = taskList.value.find(t => t.task_id === currentTask.value.task_id)
+          if (updated) currentTask.value = { ...updated }
+        }
+      } catch (error) {
+        ElMessage.error('刷新任务列表失败')
+      }
+    }
+
+    // 新增：核查按钮相关
+    const canShowWorkshopVerify = (taskRow) => {
+      const rolesArr = Array.isArray(permissionStore.roles) ? permissionStore.roles : []
+      const hasRole = (names) => rolesArr.some(r => names.includes(r))
+      return (
+        (taskRow?.status === '待核查') &&
+        hasRole(['车间地调', 'workshop_dispatcher'])
+      )
+    }
+
+    // 判断是否显示申诉审核按钮
+    const canShowAppealReview = (taskRow) => {
+      const rolesArr = Array.isArray(permissionStore.roles) ? permissionStore.roles : []
+      const hasRole = (names) => rolesArr.some(r => names.includes(r))
+      return (
+        (taskRow?.status === '申诉待审核') &&
+        hasRole(['管理员', 'admin', '调度员', 'dispatcher', '超级管理员', '区域调度员'])
+      )
+    }
+
+    // 打开申诉审核对话框
+    const openAppealReviewDialog = (taskRow) => {
+      currentTask.value = taskRow
+      appealReviewDialogVisible.value = true
+    }
+
+    // 处理申诉审核成功
+    const handleAppealReviewSuccess = async (result) => {
+      try {
+        ElMessage.success(`申诉${result.result === 'approved' ? '通过' : '驳回'}成功`)
+        appealReviewDialogVisible.value = false
+        await fetchTasks()
+        if (currentTask.value) {
+          const updated = taskList.value.find(t => t.task_id === currentTask.value.task_id)
+          if (updated) currentTask.value = { ...updated }
+        }
+      } catch (error) {
+        ElMessage.error('刷新任务列表失败')
+      }
+    }
+
+    const openWorkshopVerify = (taskRow) => {
+      // 跳转到独立的核查页面
+      router.push({
+        name: 'WorkshopVerification',
+        params: { taskId: taskRow.task_id }
+      })
+    }
+
     // 处理任务详情更新（来自子组件）
     const handleTaskUpdated = async (updateData) => {
       try {
@@ -503,6 +692,7 @@ export default {
     // 处理任务详情对话框关闭
     const handleTaskDetailClose = () => {
       currentTask.value = null
+      autoOpenWorkshopVerify.value = false
     }
     
     onMounted(() => {
@@ -546,7 +736,25 @@ export default {
       canSeeSupplierResponse,
       openSupplierResponseDialog,
       getResponseDialogTitle,
-      handleResponseSuccessFromList
+      handleResponseSuccessFromList,
+      // 新增：供应商确认相关
+      supplierConfirmDialogVisible,
+      canShowSupplierConfirm,
+      openSupplierConfirmDialog,
+      handleSupplierConfirmSuccess,
+      // 新增：申诉相关
+      supplierAppealDialogVisible,
+      handleOpenAppealDialog,
+      handleAppealSuccess,
+      // 新增：申诉审核相关
+      appealReviewDialogVisible,
+      canShowAppealReview,
+      openAppealReviewDialog,
+      handleAppealReviewSuccess,
+      // 新增：核查按钮相关
+      canShowWorkshopVerify,
+      openWorkshopVerify,
+      autoOpenWorkshopVerify
     }
   }
 }

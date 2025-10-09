@@ -18,6 +18,7 @@ class DispatchLogManager:
     """
     
     # 操作类型定义
+    # 操作类型定义
     ACTION_TYPES = {
         'create': '创建派车任务',
         'update': '更新派车任务',
@@ -27,7 +28,8 @@ class DispatchLogManager:
         'complete': '完成任务',
         'cancel': '取消任务',
         'merge': '合并车辆',
-        'downgrade': '车辆降档'
+        'downgrade': '车辆降档',
+        'verify': '核查车辆'
     }
     
     @staticmethod

@@ -19,6 +19,7 @@ from .vehicle.vehicle_capacity_reference_routes import vehicle_capacity_referenc
 from .dispatch import dispatch_bp
 from .dispatch_unit_routes import dispatch_unit_bp
 from .user_management_routes import user_management_bp
+from .upload import upload_bp
 
 # 注册所有API蓝图
 api_v1_bp.register_blueprint(permission_management.bp)
@@ -31,3 +32,4 @@ api_v1_bp.register_blueprint(vehicle_capacity_reference_bp)
 api_v1_bp.register_blueprint(dispatch_bp)
 api_v1_bp.register_blueprint(dispatch_unit_bp)
 api_v1_bp.register_blueprint(user_management_bp)
+api_v1_bp.register_blueprint(upload_bp, url_prefix='/upload')

@@ -6,8 +6,8 @@
           v-model="taskForm.required_date"
           type="date"
           placeholder="选择日期"
-          format="YYYY-MM-DD"
-          value-format="YYYY-MM-DD"
+          format="yyyy-MM-DD"
+          
           style="width: 100%"
         ></el-date-picker>
       </el-form-item>
@@ -64,8 +64,8 @@
         </el-select>
       </el-form-item>
       
-      <el-form-item label="需求吨位" prop="required_weight">
-        <el-select v-model="taskForm.required_weight" placeholder="请选择需求吨位" style="width: 100%" @change="handleWeightChange">
+      <el-form-item label="标准吨位" prop="standard_weight">
+        <el-select v-model="taskForm.standard_weight" placeholder="请选择标准吨位" style="width: 100%" @change="handleWeightChange">
           <el-option
             v-for="item in weightOptions"
             :key="item.value"
@@ -75,15 +75,15 @@
         </el-select>
       </el-form-item>
       
-      <el-form-item label="需求容积" prop="required_volume">
-        <el-input v-model="taskForm.required_volume" disabled placeholder="自动计算" style="width: 100%">
+      <el-form-item label="标准容积" prop="standard_volume">
+        <el-input v-model="taskForm.standard_volume" disabled placeholder="自动计算" style="width: 100%">
           <template #append>m³</template>
         </el-input>
       </el-form-item>
       
-      <el-form-item label="需求容积" prop="required_volume">
+      <el-form-item label="实际需求容积" prop="actual_volume">
         <el-input-number 
-          v-model="taskForm.required_volume" 
+          v-model="taskForm.actual_volume" 
           :min="0" 
           :precision="0" 
           :step="1" 
@@ -136,11 +136,10 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePermissionStore } from '@/stores/permission'
-import { createTask } from '@/services/dispatchService'
-import tonnageVolumeService from '@/services/tonnageVolumeService'
+import dayjs from 'dayjs'
 
 export default {
   name: 'CreateTask',
@@ -171,15 +170,14 @@ export default {
     
     // 表单数据
     const taskForm = reactive({
-      required_date: null,
+      required_date: new Date(), // 使用 Date 类型，避免字符串解析问题
       origin_bureau: '',
       mail_route_name: '',
       organizing_unit: '',
       transport_type: '',
       requirement_type: '',
-      required_weight: '',
-      required_volume: 0,
-      actual_weight: '',
+      standard_weight: '',
+      standard_volume: 0,
       actual_volume: 0,
       dispatch_track: '',
       special_requirements: '',
@@ -207,13 +205,13 @@ export default {
       requirement_type: [
         { required: true, message: '请选择需求类型', trigger: 'change' }
       ],
-      required_weight: [
-        { required: true, message: '请选择需求吨位', trigger: 'change' }
+      standard_weight: [
+        { required: true, message: '请选择标准吨位', trigger: 'change' }
       ],
-      required_volume: [
-        { required: true, message: '需求容积自动计算', trigger: 'change' }
+      standard_volume: [
+        { required: true, message: '标准容积自动计算', trigger: 'change' }
       ],
-      required_volume: [
+      actual_volume: [
         { 
           required: true, 
           message: '请输入实际需求容积', 
@@ -318,35 +316,51 @@ export default {
     ]
     
     // 吨位选择变化处理
-    const handleWeightChange = async (value) => {
-      if (value) {
-        try {
-          // 使用API获取吨位对应的容积信息
-          const response = await tonnageVolumeService.getVolumeByTonnage(value)
-          if (response.success && response.data) {
-            // 如果需求容积小于标准容积，自动更新需求容积
-            if (taskForm.required_volume < response.data.standard_volume) {
-              taskForm.required_volume = response.data.standard_volume
-            }
-          } else {
-            // 如果API调用失败，使用本地映射作为备选
-            if (weightVolumeMapping[value]) {
-              if (taskForm.required_volume < weightVolumeMapping[value]) {
-                taskForm.required_volume = weightVolumeMapping[value]
-              }
-            }
-          }
-        } catch (error) {
-          console.error('获取吨位容积映射失败:', error)
-          // API调用失败时使用本地映射
-          if (weightVolumeMapping[value]) {
-            if (taskForm.required_volume < weightVolumeMapping[value]) {
-              taskForm.required_volume = weightVolumeMapping[value]
+    const handleWeightChange = (value) => {
+      if (value && weightVolumeMapping[value]) {
+        const newStandardVolume = weightVolumeMapping[value]
+        taskForm.standard_volume = newStandardVolume
+        
+        // 始终将实际容积同步为标准容积，确保双向同步
+        taskForm.actual_volume = newStandardVolume
+      } else {
+        taskForm.standard_volume = 0
+        taskForm.actual_volume = 0
+      }
+    }
+
+    // 监听实际容积变化，反向同步吨位选择
+    watch(() => taskForm.actual_volume, (newVolume) => {
+      if (newVolume && newVolume > 0) {
+        // 根据容积找到最合适的吨位
+        let bestWeight = ''
+        let minDiff = Infinity
+        
+        for (const [weight, volume] of Object.entries(weightVolumeMapping)) {
+          // 找到能满足容积需求的最小吨位（容积要求 >= 标准容积）
+          if (newVolume <= volume) {
+            const diff = volume - newVolume
+            if (diff < minDiff) {
+              minDiff = diff
+              bestWeight = weight
             }
           }
         }
+        
+        // 如果没有找到合适的吨位（容积超出最大值），选择最大吨位
+        if (!bestWeight) {
+          const maxVolumeEntry = Object.entries(weightVolumeMapping)
+            .reduce((max, current) => current[1] > max[1] ? current : max)
+          bestWeight = maxVolumeEntry[0]
+        }
+        
+        // 只有当计算出的吨位与当前不同时才更新，避免循环触发
+        if (bestWeight && bestWeight !== taskForm.standard_weight) {
+          taskForm.standard_weight = bestWeight
+          taskForm.standard_volume = weightVolumeMapping[bestWeight]
+        }
       }
-    }
+    })
     
     // 提交表单
     const submitForm = async () => {
@@ -355,24 +369,10 @@ export default {
       await taskFormRef.value.validate(async (valid) => {
         if (valid) {
           try {
-            // 模拟API调用，实际项目中应替换为真实API
-            // const response = await fetch('/api/dispatch/tasks', {
-            //   method: 'POST',
-            //   headers: {
-            //     'Content-Type': 'application/json'
-            //   },
-            //   body: JSON.stringify(taskForm)
-            // })
-            // 
-            // if (!response.ok) {
-            //   throw new Error('创建派车任务失败')
-            // }
-            // 
-            // const data = await response.json()
-            
             ElMessage.success('派车任务创建成功')
             emit('create-success', {
               ...taskForm,
+              required_date: taskForm.required_date ? dayjs(taskForm.required_date).format('yyyy-MM-DD') : '',
               task_id: 'TASK' + Date.now().toString().slice(-6) // 模拟生成任务ID
             })
           } catch (error) {
@@ -389,6 +389,8 @@ export default {
     const resetForm = () => {
       if (taskFormRef.value) {
         taskFormRef.value.resetFields()
+        // 复位日期为当前日期，确保控件显示正常
+        taskForm.required_date = new Date()
       }
     }
     
@@ -423,7 +425,6 @@ export default {
       taskForm,
       rules,
       bureauOptions,
-      directionOptions,
       companyOptions,
       routeOptions,
       transportTypeOptions,

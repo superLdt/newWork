@@ -48,7 +48,22 @@ export const dispatchService = {
   async getTaskDetail(taskId) {
     try {
       const response = await apiClient.get(`/dispatch/tasks/${taskId}`)
-      return response
+      
+      // 统一响应格式，确保与其它方法保持一致
+      if (response && (response.code === 0 || response.code === 200 || response.code === 201 || response.success === true)) {
+        return {
+          code: 0,
+          message: response.message || '获取任务详情成功',
+          data: response.data !== undefined ? response.data : response
+        }
+      }
+      
+      // 如果不是成功响应，也返回统一格式
+      return {
+        code: response.code || 500,
+        message: response.message || '获取任务详情失败',
+        data: response.data || null
+      }
     } catch (error) {
       console.error('获取派车任务详情失败:', error)
       throw error
@@ -396,6 +411,189 @@ export const dispatchService = {
       throw new Error(data?.message || '大容积响应提交失败')
     } catch (error) {
       console.error('提交大容积供应商响应失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 班组确认任务
+   * @param {string|number} taskId - 任务ID
+   * @param {Object} confirmData - 确认数据
+   * @returns {Promise} - 返回确认结果
+   */
+  async confirmTeamTask(taskId, confirmData) {
+    try {
+      const data = await apiClient.post(`/dispatch/tasks/${taskId}/confirm`, confirmData)
+      
+      // 统一成功判定
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '班组确认成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      
+      // 未识别为成功，抛出错误
+      throw new Error(data?.message || '班组确认失败')
+    } catch (error) {
+      console.error('班组确认任务失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 供应商确认任务
+   * @param {string|number} taskId - 任务ID
+   * @param {Object} confirmData - 确认数据
+   * @returns {Promise} - 返回确认结果
+   */
+  async confirmSupplierTask(taskId, confirmData) {
+    try {
+      const data = await apiClient.post(`/dispatch/tasks/${taskId}/confirm`, confirmData)
+      
+      // 统一成功判定
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '供应商确认成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      
+      // 未识别为成功，抛出错误
+      throw new Error(data?.message || '供应商确认失败')
+    } catch (error) {
+      console.error('供应商确认任务失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 大容积供应商确认任务
+   * @param {string|number} taskId - 任务ID
+   * @param {Object} confirmData - 确认数据
+   * @returns {Promise} - 返回确认结果
+   */
+  async confirmLargeSupplierTask(taskId, confirmData) {
+    try {
+      const data = await apiClient.post(`/dispatch/tasks/${taskId}/large-supplier-confirm`, confirmData)
+      
+      // 统一成功判定
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        return {
+          code: 0,
+          message: data.message || '大容积供应商确认成功',
+          data: data.data !== undefined ? data.data : data
+        }
+      }
+      
+      // 未识别为成功，抛出错误
+      throw new Error(data?.message || '大容积供应商确认失败')
+    } catch (error) {
+      console.error('大容积供应商确认任务失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 提交供应商申诉
+   * @param {string} taskId - 任务ID
+   * @param {Object} appealData - 申诉数据
+   * @returns {Promise} - 返回申诉提交结果
+   */
+  async submitSupplierAppeal(taskId, appealData) {
+    try {
+      const response = await apiClient.post(`/dispatch/tasks/${taskId}/appeal`, appealData)
+      return {
+        code: 0,
+        message: response.message || '申诉提交成功',
+        data: response.data || response
+      }
+    } catch (error) {
+      console.error('提交供应商申诉失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 处理申诉审核
+   * @param {string} taskId - 任务ID
+   * @param {Object} reviewData - 审核数据
+   * @returns {Promise} - 返回审核结果
+   */
+  async processAppealReview(taskId, reviewData) {
+    try {
+      const response = await apiClient.post(`/dispatch/tasks/${taskId}/appeal/review`, reviewData)
+      return {
+        code: 0,
+        message: response.message || '申诉审核完成',
+        data: response.data || response
+      }
+    } catch (error) {
+      console.error('处理申诉审核失败:', error)
+      throw error
+    }
+  },
+
+  /**
+   * 获取任务操作记录（降档和合并记录）
+   * @param {string|number} taskId - 任务ID
+   * @returns {Promise} - 返回操作记录
+   */
+  async getTaskOperationRecords(taskId) {
+    try {
+      const data = await apiClient.get(`/dispatch/tasks/${taskId}/operation-records`)
+      
+      // 统一成功判定
+      if (
+        data && (
+          data.code === 0 ||
+          data.code === 200 ||
+          data.code === 201 ||
+          data.success === true
+        )
+      ) {
+        // 处理可能存在的双层 data 包裹：
+        // 外层：{ code: 200, message, data: { success, message, data: {...} } }
+        // 需要将最内层的 data 解包返回给调用方
+        const raw = data.data !== undefined ? data.data : data
+        let payload = raw
+        if (payload && typeof payload === 'object' && payload.data !== undefined && (payload.success === true || payload.message)) {
+          payload = payload.data
+        }
+        return {
+          code: 0,
+          message: data.message || (raw && raw.message) || '获取操作记录成功',
+          data: payload
+        }
+      }
+      
+      // 未识别为成功，抛出错误
+      throw new Error(data?.message || '获取操作记录失败')
+    } catch (error) {
+      console.error('获取任务操作记录失败:', error)
       throw error
     }
   }

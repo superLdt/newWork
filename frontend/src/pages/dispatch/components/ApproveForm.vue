@@ -36,7 +36,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 export default {
@@ -68,10 +68,17 @@ export default {
       ]
     }
     
-    // 初始化表单数据
-    onMounted(() => {
-      formData.task_id = props.task.task_id
-    })
+    // 当传入的任务变化时，实时同步任务ID并重置表单
+    watch(
+      () => props.task && props.task.task_id,
+      (newId) => {
+        formData.task_id = newId || ''
+        // 每次切换任务时重置审核结果与意见，避免沿用上一次状态
+        formData.result = 'approved'
+        formData.comment = ''
+      },
+      { immediate: true }
+    )
     
     // 提交表单
     const submitForm = async () => {

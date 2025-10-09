@@ -118,6 +118,49 @@ try {
     exit 1
 }
 
+# == STATUS HISTORY AFTER APPROVE ==
+Write-Host "== STATUS HISTORY AFTER APPROVE ==" -ForegroundColor Green
+$history1 = Invoke-RestMethod -Method Get -Uri "$base/api/v1/dispatch/tasks/$taskId/status-history" -Headers $headers
+Write-Host "Status History after approve:" -ForegroundColor Yellow
+$history1 | ConvertTo-Json -Depth 6
+
+# == SUPPLIER RESPONSE ==
+Write-Host "== SUPPLIER RESPONSE ==" -ForegroundColor Green
+$supplierObj = [ordered]@{
+    task_id        = $taskId;
+    manifest_number = "MN" + (Get-Date).ToString('HHmmss');
+    dispatch_number = "DN" + (Get-Random -Minimum 10000 -Maximum 99999);
+    vehicles        = @(@{ license_plate = "BJ-" + (Get-Random -Minimum 10000 -Maximum 99999); vehicle_type = "minibus" });
+    notes           = "供应商响应 from script";
+}
+try {
+    $supplierResp = Invoke-RestMethod -Method Post -Uri "$base/api/v1/dispatch/tasks/supplier-response" -Headers $headers -ContentType "application/json" -Body ($supplierObj | ConvertTo-Json -Depth 6)
+    Write-Host "Supplier response OK:" -ForegroundColor Green
+    $supplierResp | ConvertTo-Json -Depth 6
+} catch {
+    Write-Host "Supplier response FAILED:" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    if ($_.Exception.Response) {
+        $stream = $_.Exception.Response.GetResponseStream()
+        $reader = New-Object System.IO.StreamReader($stream)
+        $errorContent = $reader.ReadToEnd()
+        Write-Host ("Error Content: " + $errorContent) -ForegroundColor Red
+    }
+    exit 1
+}
+
+# == STATUS HISTORY AFTER SUPPLIER ==
+Write-Host "== STATUS HISTORY AFTER SUPPLIER ==" -ForegroundColor Green
+$history2 = Invoke-RestMethod -Method Get -Uri "$base/api/v1/dispatch/tasks/$taskId/status-history" -Headers $headers
+Write-Host "Status History after supplier:" -ForegroundColor Yellow
+$history2 | ConvertTo-Json -Depth 6
+
+# == TASK DETAIL AFTER SUPPLIER ==
+Write-Host "== TASK DETAIL AFTER SUPPLIER ==" -ForegroundColor Green
+$detail = Invoke-RestMethod -Method Get -Uri "$base/api/v1/dispatch/tasks/$taskId" -Headers $headers
+Write-Host "Task Detail after supplier:" -ForegroundColor Yellow
+$detail | ConvertTo-Json -Depth 6
+
 # == ASSIGN VEHICLE ==
 Write-Host "== ASSIGN VEHICLE ==" -ForegroundColor Green
 $assignObj = [ordered]@{

@@ -19,5 +19,15 @@ export default defineConfig({
         secure: false
       }
     }
+  },
+  preview: {
+    // 预览模式下也启用与开发一致的 API 代理，确保 http://localhost:4173 能访问后端
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 })

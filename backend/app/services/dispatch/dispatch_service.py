@@ -12,6 +12,8 @@ import logging
 import uuid
 from app.models.company import DispatchUnit
 from sqlalchemy import or_
+from flask import g, has_request_context # 导入 has_request_context
+from app.models.user import User # 导入 User 模型
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,32 @@ class DispatchService:
     """
     派车服务类，处理派车流程相关的数据操作
     """
+    
+    @staticmethod
+    def get_dispatch_task_by_dispatch_number(dispatch_number: str) -> Optional[Dict]:
+        """
+        根据派车单号获取派车任务信息
+        
+        Args:
+            dispatch_number: 派车单号
+            
+        Returns:
+            Optional[Dict]: 任务信息字典，如果不存在则返回None
+        """
+        try:
+            # 通过关联的车辆表查找任务
+            from app.models.vehicle.vehicle import Vehicle
+            vehicle = Vehicle.query.filter_by(dispatch_number=dispatch_number).first()
+            if not vehicle or not vehicle.task_id:
+                return None
+            
+            task = ManualDispatchTask.query.get(vehicle.task_id)
+            if not task:
+                return None
+            return task.to_dict()
+        except SQLAlchemyError as e:
+            logger.error(f"根据派车单号获取任务信息失败: {str(e)}")
+            raise
     
     @staticmethod
     def _is_large_capacity_vehicle(required_weight: str) -> bool:
@@ -56,7 +84,6 @@ class DispatchService:
             Tuple[List[Dict], int]: 任务列表和总数
         """
         try:
-            from flask import g
             query_obj = ManualDispatchTask.query
             
             # 权限过滤：根据用户角色和关联单位过滤任务
@@ -64,9 +91,67 @@ class DispatchService:
             if current_user:
                 user_roles = [role.name for role in current_user.roles] if hasattr(current_user, 'roles') else []
                 
-                # 超级管理员和区域调度员可以看到全部任务
-                if not ('超级管理员' in user_roles or '区域调度员' in user_roles):
-                    # 其他角色：可见范围 = 本单位为组开单位 OR 本人发起 OR 本单位发起（按名称）
+                # 1. 超级管理员和区域调度员：默认排除已完成（当未显式按状态筛选时）
+                if '超级管理员' in user_roles or '区域调度员' in user_roles:
+                    if not (filters and filters.get('status')):
+                        query_obj = query_obj.filter(ManualDispatchTask.status.notin_(['completed', '任务完成', '已完成']))
+                
+                # 2. 车间地调：仅展示自己创建的任务，或当前处理角色为“车间地调”的任务，排除已完成状态（中英文）
+                elif '车间地调' in user_roles:
+                    user_id = getattr(current_user, 'id', None)
+                    conditions = []
+                    # 自己创建的任务
+                    if user_id:
+                        conditions.append(ManualDispatchTask.initiator_user_id == user_id)
+                    # 需要车间地调处理的任务（任何状态，只要当前处理角色是车间地调）
+                    conditions.append(ManualDispatchTask.current_handler_role == '车间地调')
+                    
+                    if conditions:
+                        query_obj = query_obj.filter(or_(*conditions))
+                        # 默认排除已完成（当未显式按状态筛选时）
+                        if not (filters and filters.get('status')):
+                            query_obj = query_obj.filter(ManualDispatchTask.status.notin_(['completed', '任务完成', '已完成']))
+                    else:
+                        query_obj = query_obj.filter(ManualDispatchTask.task_id == None)
+                
+                # 3. 供应商/班组长/大容积供应商：只展示待响应、待确认环节，与账号绑定的派车单位相关的数据（状态中英文兼容）
+                elif any(role in user_roles for role in ['供应商', '班组长', '大容积供应商']):
+                    unit_id = getattr(current_user, 'dispatch_unit_id', None)
+                    if unit_id:
+                        # 基础过滤条件：单位和状态
+                        base_conditions = (
+                            (ManualDispatchTask.organizing_unit_id == unit_id) &
+                            (ManualDispatchTask.status.in_(['awaiting_response', 'awaiting_confirmation', '待响应', '待确认']))
+                        )
+                        
+                        # 根据角色添加业务类型过滤
+                        if '供应商' in user_roles and '大容积供应商' not in user_roles:
+                            # 普通供应商只能看委办派车
+                            query_obj = query_obj.filter(
+                                base_conditions &
+                                (ManualDispatchTask.business_type == '委办派车')
+                            )
+                        elif '大容积供应商' in user_roles and '供应商' not in user_roles:
+                            # 大容积供应商只能看大容积派车
+                            query_obj = query_obj.filter(
+                                base_conditions &
+                                (ManualDispatchTask.business_type == '大容积派车')
+                            )
+                        elif '班组长' in user_roles:
+                            # 班组长可以看所有类型的派车任务
+                            query_obj = query_obj.filter(base_conditions)
+                        else:
+                            # 如果同时拥有供应商和大容积供应商角色，可以看委办派车和大容积派车
+                            query_obj = query_obj.filter(
+                                base_conditions &
+                                (ManualDispatchTask.business_type.in_(['委办派车', '大容积派车']))
+                            )
+                    else:
+                        # 如果没有绑定单位，返回空结果
+                        query_obj = query_obj.filter(ManualDispatchTask.task_id == None)
+                
+                # 4. 其他角色：保持原有逻辑但排除已完成状态（中英文）
+                else:
                     unit_id = getattr(current_user, 'dispatch_unit_id', None)
                     unit_name = None
                     if unit_id:
@@ -83,19 +168,49 @@ class DispatchService:
                     # 允许本单位发起（名称匹配）
                     if unit_name:
                         conditions.append(ManualDispatchTask.initiator_department == unit_name)
-                    # 允许当前处理角色匹配用户任一角色（如车间地调）
+                    # 允许当前处理角色匹配用户任一角色
                     if user_roles:
                         conditions.append(ManualDispatchTask.current_handler_role.in_(user_roles))
                     if conditions:
                         query_obj = query_obj.filter(or_(*conditions))
+                        # 若未显式按状态筛选，则默认排除已完成（中英文常用写法）
+                        if not (filters and filters.get('status')):
+                            query_obj = query_obj.filter(ManualDispatchTask.status.notin_(['completed', '任务完成', '已完成']))
                     else:
                         # 如果无任何可用条件，则返回空结果
                         query_obj = query_obj.filter(ManualDispatchTask.task_id == None)
             
+            # 全局默认过滤：若未显式按状态筛选，则排除“已完成”任务（中英文）
+            if not filters or not filters.get('status'):
+                query_obj = query_obj.filter(ManualDispatchTask.status.notin_(['completed', '任务完成', '已完成']))
+
             # 应用其他过滤条件
             if filters:
                 if filters.get('status'):
-                    query_obj = query_obj.filter(ManualDispatchTask.status == filters['status'])
+                    # 兼容中英文状态筛选：当传入中文状态时，映射到英文等价状态；反之亦然
+                    status_value = filters['status']
+                    status_map = {
+                        '待审核': ['pending', '待审核'],
+                        '审核通过': ['approved', '审核通过'],
+                        '待响应': ['awaiting_response', '待响应'],
+                        '已响应': ['responded', '已响应'],
+                        '任务完成': ['completed', '任务完成', '已完成'],
+                        '已完成': ['completed', '任务完成', '已完成'],
+                        '审核拒绝': ['rejected', '审核拒绝']
+                    }
+                    # 若传入英文状态，则反向查找其中文等价项
+                    reverse_map = {
+                        'pending': ['pending', '待审核'],
+                        'approved': ['approved', '审核通过'],
+                        'awaiting_response': ['awaiting_response', '待响应'],
+                        'responded': ['responded', '已响应'],
+                        'completed': ['completed', '任务完成', '已完成'],
+                        'rejected': ['rejected', '审核拒绝']
+                    }
+                    statuses = status_map.get(status_value) or reverse_map.get(status_value) or [status_value]
+                    query_obj = query_obj.filter(ManualDispatchTask.status.in_(statuses))
+                if filters.get('business_type'):
+                    query_obj = query_obj.filter(ManualDispatchTask.business_type == filters['business_type'])
                 if filters.get('mail_route_name'):
                     query_obj = query_obj.filter(ManualDispatchTask.mail_route_name.ilike(f"%{filters['mail_route_name']}%"))
                 if filters.get('origin_bureau'):
@@ -133,21 +248,17 @@ class DispatchService:
             raise
     
     @staticmethod
-    def create_task(task_data: Dict[str, Any], current_user: Any) -> Dict[str, Any]:
+    def create_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         创建派车任务
         
         Args:
             task_data: 任务数据
-            current_user: 当前用户
             
         Returns:
             Dict: 创建结果
         """
         from app.models.task import ManualDispatchTask
-        from app.models.dispatch_status_history import DispatchStatusHistory
-        from app.models.dispatch.operation_log import OperationLog
-        from app.extensions import db
         from datetime import datetime
         import uuid
         
@@ -155,124 +266,40 @@ class DispatchService:
             # 生成任务ID
             task_id = f"T{datetime.now().strftime('%Y%m%d%H%M%S')}{str(uuid.uuid4())[:6]}"
             
-            # 获取用户角色
-            user_roles = [role.name for role in current_user.roles] if hasattr(current_user, 'roles') else []
-            primary_role = user_roles[0] if user_roles else '未知角色'
-            
-            # 根据角色确定初始状态和轨道
-            if primary_role in ['车间地调', 'workshop_dispatcher']:
-                # 车间地调创建的任务需要审核
-                initial_status = '待审核'
-                dispatch_track = 'A'  # 车间地调只能使用轨道A，需要审核
-                current_handler_role = '区域调度员'
-            elif primary_role in ['区域调度员', 'regional_dispatcher']:
-                # 区域调度员可以选择轨道
-                dispatch_track = task_data.get('dispatch_track', 'A')
-                if dispatch_track == 'A':
-                    initial_status = '待审核'
-                    current_handler_role = '区域调度员'
-                else:  # 轨道B
-                    initial_status = '待响应'
-                    current_handler_role = '供应商'
-            elif primary_role in ['超级管理员', 'super_admin']:
-                # 超级管理员可以选择轨道
-                dispatch_track = task_data.get('dispatch_track', 'A')
-                if dispatch_track == 'A':
-                    initial_status = '待审核'
-                    current_handler_role = '区域调度员'
-                else:  # 轨道B
-                    initial_status = '待响应'
-                    current_handler_role = '供应商'
-            else:
-                raise ValueError(f'角色 {primary_role} 无权限创建派车任务')
-            
-            # 自办派车兜底逻辑：如果没有组开单位，设置为当前用户所属单位
-            organizing_unit_id = task_data.get('organizing_unit_id')
-            if not organizing_unit_id and hasattr(current_user, 'department_id'):
-                organizing_unit_id = current_user.department_id
-                
-            # 确保发起人部门信息正确保存 - 始终以后端计算为准（忽略前端传入的initiator_department）
-            fe_initiator_department = task_data.get('initiator_department')
-            if fe_initiator_department:
-                logger.info(f"前端传入initiator_department={fe_initiator_department}，将忽略并以后台计算为准")
-            initiator_department = ''
-            
-            # 调试信息：打印当前用户属性
-            logger.info(f"当前用户属性: id={getattr(current_user, 'id', '无')}, dispatch_unit_id={getattr(current_user, 'dispatch_unit_id', '无')}, username={getattr(current_user, 'username', '无')}")
-            
-            # 通过用户的 dispatch_unit_id 查询派车单位名称
-            if hasattr(current_user, 'dispatch_unit_id') and current_user.dispatch_unit_id:
-                try:
-                    from app.services.dispatch_unit_service import DispatchUnitService
-                    unit_info = DispatchUnitService.get_dispatch_unit_by_id(current_user.dispatch_unit_id)
-                    if unit_info and unit_info.get('name'):
-                        initiator_department = unit_info['name']
-                        logger.info(f"从dispatch_unit_service获取部门: {initiator_department}")
-                    else:
-                        logger.warning(f"未找到ID为{current_user.dispatch_unit_id}的派车单位信息")
-                except Exception as e:
-                    logger.error(f"获取用户派车单位失败: {str(e)}")
-            
-            # 如果仍然没有获取到，使用用户名作为兜底
-            if not initiator_department:
-                initiator_department = getattr(current_user, 'username', str(current_user.id))
-                logger.info(f"未获得派车单位名称，使用用户名兜底: {initiator_department}")
-            
             # 创建任务对象
             task = ManualDispatchTask(
-                task_id=task_id,
-                mail_route_name=task_data['mail_route_name'],
-                required_date=task_data['required_date'],
-                origin_bureau=task_data['origin_bureau'],
-                transport_type=task_data['transport_type'],
-                required_weight=task_data['required_weight'],
-                required_volume=task_data['required_volume'],
+                task_id=task_data.get('task_id', task_id),
+                mail_route_name=task_data.get('mail_route_name', ''),
+                required_date=task_data.get('required_date', ''),
+                origin_bureau=task_data.get('origin_bureau', ''),
+                transport_type=task_data.get('transport_type', ''),
+                required_weight=task_data.get('required_weight', ''),
+                required_volume=task_data.get('required_volume', 0),
                 special_requirements=task_data.get('special_requirements', ''),
-                organizing_unit_id=organizing_unit_id,
+                organizing_unit_id=task_data.get('organizing_unit_id'),
                 organizing_unit=task_data.get('organizing_unit', ''),
                 requirement_type=task_data.get('requirement_type', ''),
-                initiator_user_id=current_user.id,
-                # 确保initiator_department使用正确的值
-                initiator_department=initiator_department,
-                initiator_role=primary_role,
-                status=initial_status,
-                current_handler_role=current_handler_role,
-                dispatch_track=f"轨道{dispatch_track.upper()}" if dispatch_track else "轨道A",
+                initiator_user_id=task_data.get('initiator_user_id'),
+                initiator_department=task_data.get('initiator_department', ''),
+                initiator_role=task_data.get('initiator_role', ''),
+                status=task_data.get('status', ''),
+                current_handler_role=task_data.get('current_handler_role', ''),
+                current_handler_user_id=task_data.get('current_handler_user_id'),
+                dispatch_track=task_data.get('dispatch_track', ''),
+                audit_required=task_data.get('audit_required', False),
+                business_type=task_data.get('business_type', '委办派车'),
                 created_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 updated_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             )
             
             db.session.add(task)
-            
-            # 记录状态历史 - 修复：使用模型字段 status_change/timestamp/note
-            status_history = DispatchStatusHistory(
-                task_id=task_id,
-                status_change=initial_status,
-                operator=getattr(current_user, 'username', str(current_user.id)),
-                timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                note=f'创建派车任务，轨道{dispatch_track}',
-                next_handler_role=current_handler_role
-            )
-            db.session.add(status_history)
-            
-            # 记录操作日志
-            operation_log = OperationLog(
-                task_id=task_id,
-                user_id=current_user.id,
-                user_role=primary_role,
-                operation_type='创建任务',
-                operation_content=f'创建派车任务：{task_data["mail_route_name"]}'
-            )
-            db.session.add(operation_log)
-            
-            # 提交事务
             db.session.commit()
             
             return {
-                'task_id': task_id,
-                'status': initial_status,
-                'current_handler_role': current_handler_role,
-                'dispatch_track': dispatch_track,
+                'task_id': task.task_id,
+                'status': task.status,
+                'current_handler_role': task.current_handler_role,
+                'dispatch_track': task.dispatch_track,
                 'message': '派车任务创建成功'
             }
             
@@ -298,9 +325,6 @@ class DispatchService:
             if not task:
                 raise ValueError(f"任务ID {task_id} 不存在")
             
-            # 记录原始状态
-            old_status = task.status
-            
             # 更新任务字段
             for key, value in update_data.items():
                 if hasattr(task, key):
@@ -308,43 +332,6 @@ class DispatchService:
             
             # 更新时间
             task.updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # 如果状态发生变化，创建状态历史记录
-            if 'status' in update_data and old_status != update_data['status']:
-                # 统一通过状态管理器计算下一处理角色
-                try:
-                    from app.business.dispatch.status_manager import DispatchStatusManager
-                    computed_next_handler_role = DispatchStatusManager.get_next_handler_role(
-                        previous_status=old_status,
-                        new_status=update_data['status'],
-                        operator_role=update_data.get('current_handler_role'),
-                        business_type=getattr(task, 'business_type', None)
-                    )
-                except Exception:
-                    # 回退策略：若计算失败，保持与原有行为一致，避免阻断流程
-                    computed_next_handler_role = update_data.get('current_handler_role')
-                
-                status_history = DispatchStatusHistory(
-                    task_id=task_id,
-                    status_change=f"{old_status} -> {update_data['status']}",
-                    operator=f"用户ID: {update_data.get('current_handler_user_id', '系统')}",
-                    timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    note=update_data.get('note', ''),
-                    next_handler_role=computed_next_handler_role
-                )
-                db.session.add(status_history)
-                
-                # 创建操作日志
-                operation_log = OperationLog(
-                    task_id=task_id,
-                    operation_type='状态变更',
-                    user_id=update_data.get('current_handler_user_id'),
-                    user_role=update_data.get('current_handler_role'),
-                    operation_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    operation_content=f"状态从 {old_status} 变更为 {update_data['status']}",
-                    ip_address=update_data.get('ip_address')
-                )
-                db.session.add(operation_log)
             
             db.session.commit()
             
@@ -398,11 +385,13 @@ class DispatchService:
                 task_id=vehicle_data.get('task_id'),
                 license_plate=vehicle_data.get('license_plate'),
                 carriage_number=vehicle_data.get('carriage_number'),
-                driver_name=vehicle_data.get('driver_name'),
-                driver_phone=vehicle_data.get('driver_phone'),
-                driver_id_card=vehicle_data.get('driver_id_card'),
                 vehicle_type=vehicle_data.get('vehicle_type'),
                 supplier_id=vehicle_data.get('supplier_id'),
+                supplier_type=vehicle_data.get('supplier_type'),
+                manifest_number=vehicle_data.get('manifest_number'),
+                dispatch_number=vehicle_data.get('dispatch_number'),
+                actual_volume=vehicle_data.get('actual_volume'),
+                required_volume=vehicle_data.get('required_volume'),
                 status='已分配',
                 created_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 updated_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -410,19 +399,6 @@ class DispatchService:
             
             # 保存到数据库
             db.session.add(vehicle)
-            
-            # 创建操作日志
-            operation_log = OperationLog(
-                task_id=vehicle.task_id,
-                operation_type='分配车辆',
-                user_id=vehicle_data.get('operator_id'),
-                user_role=vehicle_data.get('operator_role'),
-                operation_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                operation_content=f"分配车辆 {vehicle_data.get('license_plate')}",
-                ip_address=vehicle_data.get('ip_address')
-            )
-            db.session.add(operation_log)
-            
             db.session.commit()
             
             return vehicle.to_dict()
@@ -478,15 +454,13 @@ class DispatchService:
             raise
     
     @staticmethod
-    def merge_vehicles(source_vehicle_id: int, target_vehicle_id: int, operator_id: int, operator_role: str) -> Dict:
+    def merge_vehicles(source_vehicle_id: int, target_vehicle_id: int) -> Dict:
         """
         合并车辆信息
         
         Args:
             source_vehicle_id: 源车辆ID
             target_vehicle_id: 目标车辆ID
-            operator_id: 操作人ID
-            operator_role: 操作人角色
             
         Returns:
             Dict: 合并结果
@@ -504,12 +478,9 @@ class DispatchService:
                 source_vehicle_id=source_vehicle_id,
                 target_vehicle_id=target_vehicle_id,
                 merge_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                operator_id=operator_id,
-                operator_role=operator_role,
                 source_license_plate=source_vehicle.license_plate,
                 target_license_plate=target_vehicle.license_plate,
-                source_data=source_vehicle.to_dict(),
-                merge_reason="车辆信息合并"
+                source_data=source_vehicle.to_dict()
             )
             
             # 保存合并记录
@@ -528,17 +499,6 @@ class DispatchService:
             source_vehicle.status = '已合并'
             source_vehicle.updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
-            # 创建操作日志
-            operation_log = OperationLog(
-                task_id=source_vehicle.task_id,
-                operation_type='车辆合并',
-                operator_id=operator_id,
-                operator_role=operator_role,
-                operation_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                operation_details=f"将车辆 {source_vehicle.license_plate} 合并到 {target_vehicle.license_plate}"
-            )
-            db.session.add(operation_log)
-            
             db.session.commit()
             
             return merge_record.to_dict()
@@ -548,16 +508,13 @@ class DispatchService:
             raise
     
     @staticmethod
-    def downgrade_vehicle(vehicle_id: int, new_type: str, reason: str, operator_id: int, operator_role: str) -> Dict:
+    def downgrade_vehicle(vehicle_id: int, new_type: str) -> Dict:
         """
         车辆降档
         
         Args:
             vehicle_id: 车辆ID
             new_type: 新车型
-            reason: 降档原因
-            operator_id: 操作人ID
-            operator_role: 操作人角色
             
         Returns:
             Dict: 降档结果
@@ -578,10 +535,7 @@ class DispatchService:
                 original_type=old_type,
                 new_type=new_type,
                 downgrade_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                operator_id=operator_id,
-                operator_role=operator_role,
-                license_plate=vehicle.license_plate,
-                downgrade_reason=reason
+                license_plate=vehicle.license_plate
             )
             
             # 保存降档记录
@@ -591,17 +545,6 @@ class DispatchService:
             vehicle.vehicle_type = new_type
             vehicle.updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             
-            # 创建操作日志
-            operation_log = OperationLog(
-                task_id=vehicle.task_id,
-                operation_type='车辆降档',
-                operator_id=operator_id,
-                operator_role=operator_role,
-                operation_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                operation_details=f"将车辆 {vehicle.license_plate} 从 {old_type} 降档为 {new_type}"
-            )
-            db.session.add(operation_log)
-            
             db.session.commit()
             
             return downgrade_record.to_dict()
@@ -610,6 +553,100 @@ class DispatchService:
             logger.error(f"车辆降档失败: {str(e)}")
             raise
     
+    @staticmethod
+    def update_task_status(task_id: str, new_status: str, status_history_data: Optional[Dict] = None) -> Dict:
+        """
+        更新任务状态并记录状态历史
+        
+        Args:
+            task_id: 任务ID
+            new_status: 新状态
+            status_history_data: 状态历史数据（可选）
+            
+        Returns:
+            Dict: 更新结果
+        """
+        try:
+            # 获取任务
+            task = ManualDispatchTask.query.get(task_id)
+            if not task:
+                raise ValueError(f"任务不存在: {task_id}")
+            
+            # 更新任务状态
+            old_status = task.status
+            task.status = new_status
+            task.updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # 如果提供了状态历史数据，则创建状态历史记录
+            if status_history_data:
+                # 计算并规范字段映射
+                prev_status = status_history_data.get('previous_status')
+                new_stat = status_history_data.get('new_status', new_status)
+                changed_by = status_history_data.get('changed_by')
+                changed_at = status_history_data.get('changed_at')
+                comment = status_history_data.get('comment')
+                next_handler_role = status_history_data.get('next_handler_role')
+
+                # 若提供了下一阶段处理角色，则同步更新到任务当前处理角色
+                if next_handler_role:
+                    task.current_handler_role = next_handler_role
+
+                # 构造历史记录字段（与模型字段一致）
+                status_change_text = f"{prev_status} -> {new_stat}" if prev_status else str(new_stat)
+                # operator 使用可读字符串；若只有ID则使用 ID:<id>
+                operator_str = None
+                if changed_by is not None:
+                    # 尝试从 User 模型获取 full_name
+                    user = User.query.get(changed_by)
+                    if user and user.full_name:
+                        operator_str = user.full_name
+                    else:
+                        operator_str = f"ID:{changed_by}"
+                else:
+                    try:
+                        # 允许在 Flask 环境下读取 g.current_user 作为补充
+                        if has_request_context() and hasattr(g, 'current_user') and g.current_user:
+                            operator_str = (
+                                getattr(g.current_user, 'full_name', None)
+                                or getattr(g.current_user, 'username', None)
+                                or f"ID:{getattr(g.current_user, 'id', '系统')}"
+                            )
+                    except Exception:
+                        operator_str = None
+                if not operator_str:
+                    operator_str = '系统'
+
+                # timestamp 统一为字符串
+                try:
+                    timestamp_str = changed_at.strftime('%Y-%m-%d %H:%M:%S') if changed_at else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                status_history = DispatchStatusHistory(
+                    task_id=task_id,
+                    status_change=status_change_text,
+                    operator=operator_str,
+                    timestamp=timestamp_str,
+                    note=comment,
+                    next_handler_role=next_handler_role
+                )
+
+                # 保存到数据库
+                db.session.add(status_history)
+            
+            db.session.commit()
+            
+            return {
+                'task_id': task_id,
+                'old_status': old_status,
+                'new_status': new_status,
+                'updated_at': task.updated_at
+            }
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"更新任务状态失败: {str(e)}")
+            raise
+
     # 添加别名方法和缺失方法，用于与控制器及业务层命名对齐
     
     @staticmethod
@@ -634,11 +671,11 @@ class DispatchService:
         return DispatchService.update_task(task_id, update_data)
     
     @staticmethod
-    def create_dispatch_task(task_data: Dict, current_user: Any) -> Dict:
+    def create_dispatch_task(task_data: Dict) -> Dict:
         """
         创建新派车任务（控制器调用的别名方法）
         """
-        return DispatchService.create_task(task_data, current_user)
+        return DispatchService.create_task(task_data)
     
     @staticmethod
     def assign_vehicle_to_task(task_id: str, vehicle_data: Dict) -> Dict:
@@ -678,18 +715,6 @@ class DispatchService:
                 vehicle = DispatchService.create_vehicle(vehicle_data)
                 return vehicle
             
-            # 记录操作日志
-            operation_log = OperationLog(
-                task_id=task_id,
-                operation_type='分配车辆',
-                operator_id=vehicle_data.get('operator_id'),
-                operator_role=vehicle_data.get('operator_role'),
-                operation_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                operation_details=f"为任务分配车辆 {vehicle.license_plate}",
-                ip_address=vehicle_data.get('ip_address')
-            )
-            db.session.add(operation_log)
-            
             db.session.commit()
             
             return vehicle.to_dict()
@@ -719,50 +744,65 @@ class DispatchService:
             raise
     
     @staticmethod
-    def update_task_status(task_id: str, new_status: str, status_history_data: Optional[Dict] = None) -> Dict:
+    def add_operation_log(log_data: Dict) -> Dict:
         """
-        更新任务状态并记录历史
+        添加操作日志
         
         Args:
-            task_id: 任务ID
-            new_status: 新状态
-            status_history_data: 状态历史数据
+            log_data: 日志数据
             
         Returns:
-            Dict: 更新结果
+            Dict: 创建的日志记录
         """
         try:
-            # 获取任务
-            task = ManualDispatchTask.query.get(task_id)
-            if not task:
-                raise ValueError(f"任务不存在: {task_id}")
+            # 创建操作日志对象
+            operation_log = OperationLog(
+                task_id=log_data.get('task_id'),
+                action_type=log_data.get('action_type'),
+                action_name=log_data.get('action_name'),
+                details=log_data.get('details'),
+                user_id=log_data.get('user_id'),
+                created_at=log_data.get('created_at', datetime.now())
+            )
             
-            # 更新任务状态
-            old_status = task.status
-            task.status = new_status
-            task.updated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # 如果提供了状态历史数据，则创建历史记录
-            if status_history_data:
-                status_history = DispatchStatusHistory(
-                    task_id=task_id,
-                    status_change=f"{status_history_data.get('previous_status', old_status)} -> {new_status}",
-                    operator=f"用户ID: {status_history_data.get('changed_by', '系统')}",
-                    timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    note=status_history_data.get('comment', ''),
-                    next_handler_role=status_history_data.get('next_handler_role')
-                )
-                db.session.add(status_history)
-            
+            # 保存到数据库
+            db.session.add(operation_log)
             db.session.commit()
             
-            return {
-                'task_id': task_id,
-                'old_status': old_status,
-                'new_status': new_status,
-                'updated_at': task.updated_at
-            }
+            return operation_log.to_dict()
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"更新任务状态失败: {str(e)}")
+            logger.error(f"添加操作日志失败: {str(e)}")
+            raise
+
+    @staticmethod
+    def add_status_history(history_data: Dict) -> Dict:
+        """
+        添加状态历史记录
+        
+        Args:
+            history_data: 状态历史数据
+            
+        Returns:
+            Dict: 创建的状态历史记录
+        """
+        try:
+            # 创建状态历史对象
+            status_history = DispatchStatusHistory(
+                task_id=history_data.get('task_id'),
+                status_change=history_data.get('status_change'),
+                operator=history_data.get('operator'),
+                timestamp=history_data.get('timestamp'),
+                note=history_data.get('note'),
+                next_handler_role=history_data.get('next_handler_role')
+            )
+            
+            # 保存到数据库
+            db.session.add(status_history)
+            db.session.commit()
+            
+            return status_history.to_dict()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"添加状态历史记录失败: {str(e)}")
             raise

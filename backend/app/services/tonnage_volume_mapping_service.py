@@ -25,14 +25,15 @@ class TonnageVolumeMappingService:
         mappings = self.repository.find_all()
         return [mapping.to_dict() for mapping in mappings]
     
-    def get_active_mappings(self) -> Dict[str, float]:
+    def get_active_mappings(self) -> List[Dict[str, Any]]:
         """
         获取所有启用的吨位-容积映射关系
         
         Returns:
-            Dict[str, float]: 吨位到标准容积的映射字典
+            List[Dict[str, Any]]: 启用的映射关系的字典列表
         """
-        return self.repository.get_tonnage_volume_dict()
+        mappings = self.repository.find_active_mappings()
+        return [mapping.to_dict() for mapping in mappings]
     
     def get_mapping_by_id(self, mapping_id: int) -> Dict[str, Any]:
         """

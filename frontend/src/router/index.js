@@ -98,6 +98,25 @@ const routes = [
         }
       },
       {
+        path: '/dispatch/workshop-verification/:taskId',
+        name: 'WorkshopVerification',
+        component: () => import('../pages/dispatch/WorkshopVerification.vue'),
+        meta: {
+          title: '车间地调核查',
+          permissions: ['dispatch:approve']
+        }
+      },
+      {
+        path: '/dispatch/appeal-tasks',
+        name: 'AppealTasks',
+        component: () => import('../pages/supplier/SupplierAppealTasks.vue'),
+        meta: {
+          title: '申诉任务管理',
+          menuCode: 'appeal_tasks',
+          permissions: ['appeal:read']
+        }
+      },
+      {
         path: '/dispatch/tracking',
         name: 'TransportTracking',
         component: ComingSoon,
