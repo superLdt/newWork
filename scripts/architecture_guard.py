@@ -7,6 +7,7 @@
 import os
 import re
 import argparse
+import sys
 from pathlib import Path
 from typing import List, Dict, Set
 
@@ -163,7 +164,11 @@ def main():
     # 确定检查目录
     check_dir = args.directory
     if args.module:
-        check_dir = os.path.join(args.directory, 'src', args.module)
+        # 在Windows环境下使用正确的路径分隔符
+        if sys.platform == "win32":
+            check_dir = os.path.join(args.directory, 'src', args.module)
+        else:
+            check_dir = os.path.join(args.directory, 'src', args.module)
     
     if not os.path.exists(check_dir):
         print(f"错误: 目录 {check_dir} 不存在")

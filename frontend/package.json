@@ -1,0 +1,33 @@
+{
+  "name": "newcheguan-frontend",
+  "version": "1.0.0",
+  "description": "智能运力系统前端",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "axios": "^1.11.0",
+    "echarts": "^6.0.0",
+    "element-plus": "^2.8.1",
+    "pinia": "^3.0.3",
+    "vue": "^3.5.18",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "sass": "^1.92.1",
+    "vite": "^7.1.2"
+  },
+  "keywords": [
+    "vue",
+    "element-plus",
+    "transportation"
+  ],
+  "author": "newCheguan Team",
+  "license": "MIT"
+}
