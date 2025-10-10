@@ -267,17 +267,13 @@ export default {
           // 使用API获取吨位对应的容积信息
           const response = await tonnageVolumeService.getVolumeByTonnage(value)
           if (response.success && response.data) {
-            // 如果需求容积小于标准容积，自动更新需求容积
-            if (formData.required_volume < response.data.standard_volume) {
-              formData.required_volume = response.data.standard_volume
-            }
+            // 直接更新需求容积为对应的标准容积
+            formData.required_volume = response.data.standard_volume
           } else {
             // 如果API调用失败，使用本地映射作为备选
             const localMapping = getLocalWeightVolumeMapping()
             if (localMapping[value]) {
-              if (formData.required_volume < localMapping[value]) {
-                formData.required_volume = localMapping[value]
-              }
+              formData.required_volume = localMapping[value]
             }
           }
         } catch (error) {
@@ -286,9 +282,7 @@ export default {
           // API调用失败时使用本地映射
           const localMapping = getLocalWeightVolumeMapping()
           if (localMapping[value]) {
-            if (formData.required_volume < localMapping[value]) {
-              formData.required_volume = localMapping[value]
-            }
+            formData.required_volume = localMapping[value]
           }
         }
       }
@@ -307,8 +301,8 @@ export default {
       }
     }
     
-    // 监听标准吨位变化，自动设置标准容积
-    watch(() => formData.standard_weight, (newWeight) => {
+    // 监听需求吨位变化，自动设置需求容积
+    watch(() => formData.required_weight, (newWeight) => {
       handleWeightChange(newWeight)
     })
     
